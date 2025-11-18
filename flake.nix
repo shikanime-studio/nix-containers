@@ -40,12 +40,7 @@
         treefmt-nix.flakeModule
       ];
       perSystem =
-        {
-          self',
-          pkgs,
-          lib,
-          ...
-        }:
+        { pkgs, lib, ... }:
         {
           devenv.shells.default = {
             imports = [
@@ -62,6 +57,18 @@
               description = "Nix Containers CLI";
               homepage = "https://github.com/shikanime/nix-containers";
               license = lib.licenses.asl20;
+            };
+          };
+
+          packages.tmp = pkgs.dockerTools.streamLayeredImage {
+            name = "tmp";
+            tag = "latest";
+            config = {
+              Cmd = [
+                "/bin/sh"
+                "-c"
+                "echo 'Hello, World!' && sleep 10"
+              ];
             };
           };
         };

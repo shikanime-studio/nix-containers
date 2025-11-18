@@ -2,13 +2,17 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 
+	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/client"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/daemon"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -36,6 +40,14 @@ func WithPush(push bool) BuildOption {
 	return func(o *buildOption) { o.push = push }
 }
 
+func makeBuildOption(opts ...BuildOption) *buildOption {
+	o := &buildOption{}
+	for _, opt := range opts {
+		opt(o)
+	}
+	return o
+}
+
 var (
 	rootCmd = &cobra.Command{
 		Use:   "nix-containers",
@@ -54,6 +66,7 @@ var (
 		Example: "# Build from current directory and push\n" +
 			"IMAGE=ghcr.io/you/app:latest PLATFORMS=linux/amd64 PUSH_IMAGE=true ./nix-containers build .",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
 			image := getImage()
 			plats := getPlatforms()
 			pushImage := getPushImage()
@@ -69,7 +82,7 @@ var (
 					"build context must be provided via arg or --build-context/BUILD_CONTEXT",
 				)
 			}
-			slog.Info(
+			slog.InfoContext(ctx,
 				"build config",
 				"image", image.String(),
 				"platforms", plats,
@@ -84,8 +97,8 @@ var (
 			if acceptFlake {
 				opts = append(opts, WithStreamLayeredImageOption(WithAcceptFlakeConfig()))
 			}
-			return buildAndPushMultiplatformImage(
-				context.Background(),
+			return buildAndPush(
+				ctx,
 				buildContext,
 				image,
 				plats,
@@ -151,18 +164,31 @@ func main() {
 	}
 }
 
-func buildFlakeImage(
+func tagImage(ctx context.Context, loadedRef name.Reference, ref name.Reference) error {
+	cli, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		return fmt.Errorf("create docker client failed: %w", err)
+	}
+	cli.NegotiateAPIVersion(ctx)
+	if err = cli.ImageTag(ctx, loadedRef.Name(), ref.Name()); err != nil {
+		return fmt.Errorf("tag image failed: %w", err)
+	}
+	_, err = cli.ImageRemove(ctx, loadedRef.Name(), image.RemoveOptions{})
+	if err != nil {
+		return fmt.Errorf("remove image failed: %w", err)
+	}
+	return nil
+}
+
+func buildPlatformImage(
 	ctx context.Context,
 	buildContext string,
 	p *v1.Platform,
 	ref name.Reference,
 	opts ...BuildOption,
-) (v1.Image, error) {
-	o := &buildOption{}
-	for _, opt := range opts {
-		opt(o)
-	}
-	slog.Info("build image", "ref", ref.Name(), "os", p.OS, "arch", p.Architecture)
+) (name.Reference, error) {
+	o := makeBuildOption(opts...)
+	slog.InfoContext(ctx, "build image", "ref", ref.Name(), "os", p.OS, "arch", p.Architecture)
 	path, err := buildStreamLayeredImage(
 		ctx,
 		formatNixFlakePackage(buildContext, ref, p),
@@ -171,24 +197,7 @@ func buildFlakeImage(
 	if err != nil {
 		return nil, fmt.Errorf("build stream layered image failed: %w", err)
 	}
-	return imageFromStreamLayeredImage(ctx, path)
-}
-
-func buildPlatformImage(
-	ctx context.Context,
-	buildContext string,
-	p *v1.Platform,
-	ref name.Reference,
-) (name.Reference, v1.Image, error) {
-	img, err := buildFlakeImage(ctx, buildContext, p, ref)
-	if err != nil {
-		return nil, nil, fmt.Errorf("build flake image failed: %w", err)
-	}
-	ref, err = name.NewTag(formatPlatformReference(ref, p))
-	if err != nil {
-		return nil, nil, fmt.Errorf("create platform reference failed: %w", err)
-	}
-	return ref, img, nil
+	return loadStreamLayeredImage(ctx, ref, path)
 }
 
 func buildAndPushMultiplatformImage(
@@ -198,30 +207,45 @@ func buildAndPushMultiplatformImage(
 	ps []*v1.Platform,
 	opts ...BuildOption,
 ) error {
-	o := &buildOption{}
-	for _, opt := range opts {
-		opt(o)
+	o := makeBuildOption(opts...)
+	if !o.push {
+		return fmt.Errorf(
+			"multiplatform image build is only supported when pushing to remote registry",
+		)
 	}
 	var adds []mutate.IndexAddendum
+	var errs []error
 	for _, p := range ps {
-		plaformRef, img, err := buildPlatformImage(ctx, buildContext, p, ref)
+		loadedRef, err := buildPlatformImage(ctx, buildContext, p, ref)
 		if err != nil {
 			return err
 		}
-		if o.push {
-			if err := remote.Write(plaformRef, img, o.remote...); err != nil {
-				return err
-			}
+		platformTag, err := formatPlatformReference(ref, p)
+		if err != nil {
+			return fmt.Errorf("format platform reference failed: %w", err)
 		}
-		adds = append(adds, mutate.IndexAddendum{
-			Add:        img,
-			Descriptor: v1.Descriptor{Platform: p},
-		})
+		if err = tagImage(ctx, loadedRef, platformTag); err != nil {
+			return err
+		}
+		img, err := daemon.Image(platformTag)
+		if err != nil {
+			return err
+		}
+		slog.DebugContext(ctx, "push image", "ref", platformTag.Name())
+		if err := remote.Write(platformTag, img, o.remote...); err != nil {
+			errs = append(errs, fmt.Errorf("push image failed: %w", err))
+		} else {
+			adds = append(adds, mutate.IndexAddendum{
+				Add:        img,
+				Descriptor: v1.Descriptor{Platform: p},
+			})
+		}
 	}
-	if o.push {
-		return remote.WriteIndex(ref, mutate.AppendManifests(empty.Index, adds...), o.remote...)
+	if len(errs) > 0 {
+		return fmt.Errorf("push images failed: %w", errors.Join(errs...))
 	}
-	return nil
+	slog.DebugContext(ctx, "push manifest", "ref", ref.Name(), "plats", ps)
+	return remote.WriteIndex(ref, mutate.AppendManifests(empty.Index, adds...), o.remote...)
 }
 
 func buildAndPushImage(
@@ -231,39 +255,50 @@ func buildAndPushImage(
 	p *v1.Platform,
 	opts ...BuildOption,
 ) error {
-	o := &buildOption{}
-	for _, opt := range opts {
-		opt(o)
-	}
-	img, err := buildFlakeImage(ctx, buildContext, p, ref, opts...)
+	o := makeBuildOption(opts...)
+	loadedRef, err := buildPlatformImage(ctx, buildContext, p, ref)
 	if err != nil {
 		return fmt.Errorf("build flake image failed: %w", err)
 	}
+	if loadedRef != ref {
+		slog.DebugContext(ctx, "tag image", "ref", ref.Name(), "loadedRef", loadedRef.Name())
+		if err = tagImage(ctx, loadedRef, ref); err != nil {
+			return err
+		}
+	}
+	img, err := daemon.Image(ref)
+	if err != nil {
+		return err
+	}
 	if o.push {
+		slog.DebugContext(ctx, "push image", "ref", ref.Name())
 		return remote.Write(ref, img, o.remote...)
 	}
 	return nil
 }
 
-func build(
+func buildAndPush(
 	ctx context.Context,
 	buildContext string,
+	ref name.Reference,
 	plats []*v1.Platform,
 	opts ...BuildOption,
 ) error {
 	if len(plats) == 1 {
+		slog.DebugContext(ctx, "build image", "ref", ref.Name(), "plat", plats[0])
 		return buildAndPushImage(
 			ctx,
 			buildContext,
-			getImage(),
+			ref,
 			plats[0],
 			opts...,
 		)
 	}
+	slog.DebugContext(ctx, "build image", "ref", ref.Name(), "plats", plats)
 	return buildAndPushMultiplatformImage(
 		ctx,
 		buildContext,
-		getImage(),
+		ref,
 		plats,
 		opts...,
 	)

@@ -91,9 +91,9 @@ func getBuildContext() string {
 	return viper.GetString("build_context")
 }
 
-func getImage() name.Reference {
+func getImage() name.Tag {
 	s := viper.GetString("image")
-	ref, err := name.ParseReference(s)
+	ref, err := name.NewTag(s)
 	if err != nil {
 		slog.Error("invalid image reference", "image", s, "err", err)
 		os.Exit(1)
