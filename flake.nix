@@ -59,18 +59,6 @@
               license = lib.licenses.asl20;
             };
           };
-
-          packages.tmp = pkgs.dockerTools.streamLayeredImage {
-            name = "tmp";
-            tag = "latest";
-            config = {
-              Cmd = [
-                "/bin/sh"
-                "-c"
-                "echo 'Hello, World!' && sleep 10"
-              ];
-            };
-          };
         };
       systems = [
         "x86_64-linux"
