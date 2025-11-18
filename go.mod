@@ -1,4 +1,4 @@
-module github.com/shikanime/nix-containers
+module github.com/shikanime-studio/nix-containers
 
 go 1.25.2
 

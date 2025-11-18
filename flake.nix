@@ -55,7 +55,7 @@
             vendorHash = "sha256-ypaMK9nCi+Kdgd6mfml2cMAprZn3+vfk1rUNruGkuAY=";
             meta = {
               description = "Nix Containers CLI";
-              homepage = "https://github.com/shikanime/nix-containers";
+              homepage = "https://github.com/shikanime-studio/nix-containers";
               license = lib.licenses.asl20;
             };
           };
