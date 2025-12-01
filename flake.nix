@@ -39,14 +39,27 @@
         git-hooks.flakeModule
         treefmt-nix.flakeModule
       ];
-      perSystem = _: {
-        devenv.shells.default = {
-          imports = [
-            devlib.devenvModules.shikanime-studio
-          ];
-          languages.go.enable = true;
+      perSystem =
+        { pkgs, lib, ... }:
+        {
+          devenv.shells.default = {
+            imports = [
+              devlib.devenvModules.shikanime-studio
+            ];
+            languages.go.enable = true;
+          };
+          packages.default = pkgs.buildGoModule {
+            pname = "nix-containers";
+            version = "v0.1.0";
+            src = lib.cleanSource ./.;
+            vendorHash = "sha256-ypaMK9nCi+Kdgd6mfml2cMAprZn3+vfk1rUNruGkuAY=";
+            meta = {
+              description = "Nix Containers CLI";
+              homepage = "https://github.com/shikanime-studio/nix-containers";
+              license = lib.licenses.asl20;
+            };
+          };
         };
-      };
       systems = [
         "x86_64-linux"
         "x86_64-darwin"

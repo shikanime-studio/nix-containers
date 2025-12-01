@@ -4,7 +4,7 @@ Build OCI images from Nix flakes, with optional multi-platform output and push t
 
 ## Installation
 
-- Go install: `go install github.com/shikanime/nix-containers@latest`
+- Go install: `go install github.com/shikanime-studio/nix-containers@latest`
 - From source: `go build -o nix-containers .`
 
 ## Commands
