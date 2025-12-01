@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log/slog"
 
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -23,7 +22,7 @@ var (
 		Short:   "Build and optionally push images",
 		Long:    "Builds OCI images from a Nix flake and optionally pushes them to a registry. Configure via env vars: IMAGE, PLATFORMS, BUILD_CONTEXT, PUSH_IMAGE, LOG_LEVEL, ACCEPT_FLAKE_CONFIG.",
 		Example: "IMAGE=ghcr.io/you/app:latest PLATFORMS=linux/amd64 PUSH_IMAGE=true BUILD_CONTEXT=. ACCEPT_FLAKE_CONFIG=true ./nix-containers skaffold build",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			buildContext := getBuildContext()
 			image := getImage()
 			plats := getPlatforms()
@@ -44,7 +43,7 @@ var (
 			if acceptFlake {
 				opts = append(opts, WithStreamLayeredImageOption(WithAcceptFlakeConfig()))
 			}
-			return build(context.Background(), buildContext, plats, opts...)
+			return build(cmd.Context(), buildContext, plats, opts...)
 		},
 	}
 )

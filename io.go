@@ -24,8 +24,8 @@ func imageFromStreamLayeredImage(ctx context.Context, path string) (v1.Image, er
 	if err != nil {
 		return nil, err
 	}
-	defer s.Close()
-	go s.Run()
+	defer func() { _ = s.Close() }()
+	go func() { _ = s.Run() }()
 	slog.Info("streaming layered image", "image", tag)
 	return tarball.Image(streamLayeredImageOpener(s), &tag)
 }

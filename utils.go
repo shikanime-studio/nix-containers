@@ -24,6 +24,7 @@ func formatArch(s string) string {
 func formatPlatformReference(ref name.Reference, p *v1.Platform) string {
 	return fmt.Sprintf("%s_%s_%s", ref.Name(), p.OS, p.Architecture)
 }
+
 func formatNixFlakePackageName(ref name.Reference) string {
 	repo := ref.Context().RepositoryStr()
 	segs := strings.Split(repo, "/")

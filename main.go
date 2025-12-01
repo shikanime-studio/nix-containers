@@ -85,7 +85,7 @@ var (
 				opts = append(opts, WithStreamLayeredImageOption(WithAcceptFlakeConfig()))
 			}
 			return buildAndPushMultiplatformImage(
-				context.Background(),
+				cmd.Context(),
 				buildContext,
 				image,
 				plats,
@@ -202,7 +202,7 @@ func buildAndPushMultiplatformImage(
 	for _, opt := range opts {
 		opt(o)
 	}
-	var adds []mutate.IndexAddendum
+	adds := make([]mutate.IndexAddendum, 0, len(ps))
 	for _, p := range ps {
 		plaformRef, img, err := buildPlatformImage(ctx, buildContext, p, ref)
 		if err != nil {
