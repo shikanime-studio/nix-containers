@@ -23,14 +23,15 @@ var (
 		Long:    "Builds OCI images from a Nix flake and optionally pushes them to a registry. Configure via env vars: IMAGE, PLATFORMS, BUILD_CONTEXT, PUSH_IMAGE, LOG_LEVEL, ACCEPT_FLAKE_CONFIG.",
 		Example: "IMAGE=ghcr.io/you/app:latest PLATFORMS=linux/amd64 PUSH_IMAGE=true BUILD_CONTEXT=. ACCEPT_FLAKE_CONFIG=true ./nix-containers skaffold build",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			ctx := cmd.Context()
 			buildContext := getBuildContext()
-			image := getImage()
+			ref := getImage()
 			plats := getPlatforms()
 			pushImage := getPushImage()
 			acceptFlake := getAcceptFlakeConfig()
-			slog.Info(
+			slog.InfoContext(ctx,
 				"build config",
-				"image", image.String(),
+				"image", ref.String(),
 				"platforms", plats,
 				"build_context", buildContext,
 				"push", pushImage,
@@ -43,7 +44,7 @@ var (
 			if acceptFlake {
 				opts = append(opts, WithStreamLayeredImageOption(WithAcceptFlakeConfig()))
 			}
-			return build(cmd.Context(), buildContext, plats, opts...)
+			return buildAndPush(ctx, buildContext, ref, plats, opts...)
 		},
 	}
 )

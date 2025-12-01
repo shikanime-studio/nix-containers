@@ -10,79 +10,129 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/docker/docker/client"
 	"github.com/google/go-containerregistry/pkg/name"
-	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/tarball"
+	"golang.org/x/sync/errgroup"
 )
 
-func imageFromStreamLayeredImage(ctx context.Context, path string) (v1.Image, error) {
-	tag, err := name.NewTag(getImage().String())
-	if err != nil {
-		return nil, err
-	}
-	s, err := streamLayeredImageCommand(ctx, path)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = s.Close() }()
-	go func() { _ = s.Run() }()
-	slog.Info("streaming layered image", "image", tag)
-	return tarball.Image(streamLayeredImageOpener(s), &tag)
+type imageLoadProgress struct {
+	Status         string         `json:"status"`
+	Progress       string         `json:"progress"`
+	ID             string         `json:"id"`
+	ProgressDetail map[string]any `json:"progressDetail"`
 }
 
-type streamLayeredImageCmd struct {
-	rc  io.ReadCloser
-	cmd *exec.Cmd
+type imageLoadResult struct {
+	Stream string `json:"stream"`
 }
 
-func streamLayeredImageCommand(ctx context.Context, path string) (*streamLayeredImageCmd, error) {
+func readImageLoadedRef(
+	ctx context.Context,
+	r *bufio.Reader,
+) (name.Reference, error) {
+	for {
+		line, err := r.ReadString('\n')
+		if err != nil {
+			return nil, fmt.Errorf("failed to read line: %w", err)
+		}
+		var progress imageLoadProgress
+		if err = json.Unmarshal([]byte(line), &progress); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, fmt.Errorf("failed to decode image load progress: %w", err)
+		}
+		if progress.Status == "Loading layer" {
+			slog.DebugContext(
+				ctx,
+				"loading layer",
+				"id",
+				progress.ID,
+				"progress",
+				progress.Progress,
+			)
+		} else {
+			var result imageLoadResult
+			if err = json.Unmarshal([]byte(line), &result); err != nil {
+				return nil, fmt.Errorf("failed to decode image load result: %w", err)
+			}
+			slog.DebugContext(ctx, "loaded image", "stream", result.Stream)
+			loadedRef, err := name.ParseReference(
+				strings.TrimSpace(strings.TrimPrefix(result.Stream, "Loaded image: ")),
+			)
+			if err != nil {
+				return nil, err
+			}
+			return loadedRef, nil
+		}
+	}
+	return nil, fmt.Errorf("failed to read loaded ref")
+}
+
+func loadStreamLayeredImage(
+	ctx context.Context,
+	ref name.Reference,
+	path string,
+) (name.Reference, error) {
 	cmd := exec.CommandContext(ctx, path)
-	stdout, err := cmd.StdoutPipe()
+
+	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
-	return &streamLayeredImageCmd{rc: stdout, cmd: cmd}, nil
-}
+	stream := bufio.NewReader(stdoutPipe)
 
-func (s *streamLayeredImageCmd) Read(p []byte) (int, error) {
-	return s.rc.Read(p)
-}
-
-func (s *streamLayeredImageCmd) Close() error {
-	if err := s.rc.Close(); err != nil {
-		return fmt.Errorf("failed to close read closer: %w", err)
-	}
-	if err := s.cmd.Wait(); err != nil {
-		return fmt.Errorf("failed to wait for command: %w", err)
-	}
-	return nil
-}
-
-func (s *streamLayeredImageCmd) Run() error {
-	stderr, err := s.cmd.StderrPipe()
+	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
-		return fmt.Errorf("failed to create stderr pipe: %w", err)
+		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
-	if err := s.cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start command: %w", err)
-	}
-	scanner := bufio.NewScanner(stderr)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line != "" {
-			slog.Debug(line, "cmd", s.cmd.Path)
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		slog.Warn("stderr scan failed", "cmd", s.cmd.Path, "err", err)
-	}
-	return nil
-}
+	sc := bufio.NewScanner(stderrPipe)
 
-func streamLayeredImageOpener(cmd *streamLayeredImageCmd) func() (io.ReadCloser, error) {
-	return func() (io.ReadCloser, error) {
-		return cmd, nil
+	if err = cmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start stream command: %w", err)
 	}
+
+	wg := errgroup.Group{}
+	wg.Go(func() error {
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line != "" {
+				slog.DebugContext(ctx, line, "cmd", cmd.Path)
+			}
+		}
+		if err = sc.Err(); err != nil {
+			return fmt.Errorf("stderr scan failed: %w", err)
+		}
+		return nil
+	})
+
+	slog.InfoContext(ctx, "streaming layered image", "image", ref)
+	cli, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		return nil, fmt.Errorf("create docker client failed: %w", err)
+	}
+	cli.NegotiateAPIVersion(ctx)
+
+	resp, err := cli.ImageLoad(ctx, stream)
+	if err != nil {
+		return nil, fmt.Errorf("docker image load failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	r := bufio.NewReader(resp.Body)
+
+	loadedRef, err := readImageLoadedRef(ctx, r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read loaded ref: %w", err)
+	}
+
+	if err = wg.Wait(); err != nil {
+		return nil, fmt.Errorf("failed to wait for stream command: %w", err)
+	}
+	if err = cmd.Wait(); err != nil {
+		return nil, fmt.Errorf("failed to wait for command: %w", err)
+	}
+
+	return loadedRef, nil
 }
 
 type layeredImageOption func(*layeredImageOptions)
@@ -95,7 +145,15 @@ func WithAcceptFlakeConfig() layeredImageOption {
 	return func(o *layeredImageOptions) { o.acceptFlakeConfig = true }
 }
 
-type StreamLayeredImageBuildResult struct {
+func makeLayeredImageOptions(opts ...layeredImageOption) *layeredImageOptions {
+	o := &layeredImageOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+	return o
+}
+
+type streamLayeredImageBuildResult struct {
 	DrvPath   string            `json:"drvPath"`
 	Outputs   map[string]string `json:"outputs"`
 	StartTime int64             `json:"startTime"`
@@ -107,10 +165,7 @@ func buildStreamLayeredImage(
 	url string,
 	opts ...layeredImageOption,
 ) (string, error) {
-	o := &layeredImageOptions{}
-	for _, opt := range opts {
-		opt(o)
-	}
+	o := makeLayeredImageOptions(opts...)
 
 	args := []string{"build"}
 	if o.acceptFlakeConfig {
@@ -118,50 +173,54 @@ func buildStreamLayeredImage(
 	}
 	args = append(args, "--json", url)
 	cmd := exec.CommandContext(ctx, "nix", args...)
+	slog.DebugContext(ctx, "running command", "cmd", cmd.Path, "args", args)
 
-	stdout, err := cmd.StdoutPipe()
+	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return "", fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
+	dec := json.NewDecoder(bufio.NewReader(stdoutPipe))
 
-	stderr, err := cmd.StderrPipe()
+	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
 		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
+	sc := bufio.NewScanner(stderrPipe)
 
 	if err = cmd.Start(); err != nil {
-		slog.Warn("nix build start failed", "url", url, "err", err)
-		return "", fmt.Errorf("failed to start command: %w", err)
+		return "", fmt.Errorf("failed to run command: %w", err)
 	}
 
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
+	wg := errgroup.Group{}
+	wg.Go(func() error {
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
 			if line != "" {
-				slog.Debug(line, "url", url)
+				slog.DebugContext(ctx, line, "url", url)
 			}
 		}
-		if err = scanner.Err(); err != nil {
-			slog.Warn("stderr scan failed", "url", url, "err", err)
+		if err = sc.Err(); err != nil {
+			return fmt.Errorf("stderr scan failed: %w", err)
 		}
-	}()
+		return nil
+	})
 
-	outBytes, err := io.ReadAll(stdout)
-	if err != nil {
-		return "", fmt.Errorf("failed to read stdout: %w", err)
+	var result []*streamLayeredImageBuildResult
+	if err := dec.Decode(&result); err != nil {
+		return "", fmt.Errorf("failed to parse nix build output: %w", err)
+	}
+
+	if err := wg.Wait(); err != nil {
+		return "", fmt.Errorf("failed to wait for command: %w", err)
 	}
 	if err := cmd.Wait(); err != nil {
 		return "", fmt.Errorf("failed to wait for command: %w", err)
 	}
-	var result []*StreamLayeredImageBuildResult
-	if err := json.Unmarshal(outBytes, &result); err != nil {
-		return "", fmt.Errorf("failed to parse nix build output: %w", err)
-	}
+
 	if len(result) == 0 {
 		return "", fmt.Errorf("no output path found in nix build result")
 	}
-	slog.Debug(
+	slog.DebugContext(ctx,
 		"nix build completed",
 		"url", url,
 		"drvPath", result[0].DrvPath,

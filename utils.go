@@ -21,8 +21,12 @@ func formatArch(s string) string {
 	}
 }
 
-func formatPlatformReference(ref name.Reference, p *v1.Platform) string {
-	return fmt.Sprintf("%s_%s_%s", ref.Name(), p.OS, p.Architecture)
+func formatPlatformReference(ref name.Reference, p *v1.Platform) (*name.Tag, error) {
+	tag, err := name.NewTag(fmt.Sprintf("%s_%s_%s", ref.Name(), p.OS, p.Architecture))
+	if err != nil {
+		return nil, fmt.Errorf("failed to format platform reference: %w", err)
+	}
+	return &tag, nil
 }
 
 func formatNixFlakePackageName(ref name.Reference) string {
