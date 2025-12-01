@@ -28,6 +28,7 @@ func formatPlatformReference(ref name.Reference, p *v1.Platform) (*name.Tag, err
 	}
 	return &tag, nil
 }
+
 func formatNixFlakePackageName(ref name.Reference) string {
 	repo := ref.Context().RepositoryStr()
 	segs := strings.Split(repo, "/")

@@ -117,7 +117,7 @@ func loadStreamLayeredImage(
 	if err != nil {
 		return nil, fmt.Errorf("docker image load failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	r := bufio.NewReader(resp.Body)
 
 	loadedRef, err := readImageLoadedRef(ctx, r)

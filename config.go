@@ -1,3 +1,4 @@
+// CLI to build and push OCI images from Nix flakes
 package main
 
 import (
@@ -71,9 +72,10 @@ func getPlatforms() []*v1.Platform {
 		slog.Info("no platforms specified", "detected_os", hp.OS, "detected_arch", hp.Architecture)
 		return []*v1.Platform{hp}
 	}
-	var plats []*v1.Platform
-	for _, ps := range strings.Split(v, ",") {
-		plats = append(plats, parsePlatform(ps))
+	ps := strings.Split(v, ",")
+	plats := make([]*v1.Platform, 0, len(ps))
+	for _, s := range ps {
+		plats = append(plats, parsePlatform(s))
 	}
 	return plats
 }

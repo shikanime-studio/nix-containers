@@ -164,7 +164,7 @@ func main() {
 	}
 }
 
-func tagImage(ctx context.Context, loadedRef name.Reference, ref name.Reference) error {
+func tagImage(ctx context.Context, loadedRef, ref name.Reference) error {
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		return fmt.Errorf("create docker client failed: %w", err)
@@ -224,7 +224,7 @@ func buildAndPushMultiplatformImage(
 		if err != nil {
 			return fmt.Errorf("format platform reference failed: %w", err)
 		}
-		if err = tagImage(ctx, loadedRef, platformTag); err != nil {
+		if err := tagImage(ctx, loadedRef, platformTag); err != nil {
 			return err
 		}
 		img, err := daemon.Image(platformTag)
@@ -262,7 +262,7 @@ func buildAndPushImage(
 	}
 	if loadedRef != ref {
 		slog.DebugContext(ctx, "tag image", "ref", ref.Name(), "loadedRef", loadedRef.Name())
-		if err = tagImage(ctx, loadedRef, ref); err != nil {
+		if err := tagImage(ctx, loadedRef, ref); err != nil {
 			return err
 		}
 	}
