@@ -75,7 +75,11 @@ var (
 			if len(args) > 0 {
 				buildContext = args[0]
 			} else {
-				buildContext = getBuildContext()
+				var err error
+				buildContext, err = os.Getwd()
+				if err != nil {
+					return fmt.Errorf("failed to get current working directory: %w", err)
+				}
 			}
 			if buildContext == "" {
 				return fmt.Errorf(
