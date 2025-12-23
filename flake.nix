@@ -43,12 +43,15 @@
       perSystem =
         { pkgs, lib, ... }:
         {
-          devenv.shells.default = {
-            imports = [
-              devlib.devenvModules.shikanime-studio
-            ];
-            languages.go.enable = true;
-          };
+          devenv.shells.default.imports = [
+            inputs.devlib.devenvModules.docs
+            inputs.devlib.devenvModules.formats
+            inputs.devlib.devenvModules.github
+            inputs.devlib.devenvModules.go
+            inputs.devlib.devenvModules.nix
+            inputs.devlib.devenvModules.shell
+            devlib.devenvModules.shikanime-studio
+          ];
           packages.default = pkgs.buildGoModule {
             pname = "nix-containers";
             version = "v0.1.0";

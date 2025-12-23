@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -18,6 +17,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/sync/errgroup"
 )
 
 type BuildOption func(*buildOption)
@@ -214,35 +214,37 @@ func buildAndPushMultiplatformImage(
 		)
 	}
 	var adds []mutate.IndexAddendum
-	var errs []error
+	wg, ctx := errgroup.WithContext(ctx)
 	for _, p := range ps {
-		loadedRef, err := buildPlatformImage(ctx, buildContext, p, ref)
-		if err != nil {
-			return err
-		}
-		platformTag, err := formatPlatformReference(ref, p)
-		if err != nil {
-			return fmt.Errorf("format platform reference failed: %w", err)
-		}
-		if err := tagImage(ctx, loadedRef, platformTag); err != nil {
-			return err
-		}
-		img, err := daemon.Image(platformTag)
-		if err != nil {
-			return err
-		}
-		slog.DebugContext(ctx, "push image", "ref", platformTag.Name())
-		if err := remote.Write(platformTag, img, o.remote...); err != nil {
-			errs = append(errs, fmt.Errorf("push image failed: %w", err))
-		} else {
+		wg.Go(func() error {
+			loadedRef, err := buildPlatformImage(ctx, buildContext, p, ref)
+			if err != nil {
+				return err
+			}
+			platformTag, err := formatPlatformReference(ref, p)
+			if err != nil {
+				return fmt.Errorf("format platform reference failed: %w", err)
+			}
+			if err = tagImage(ctx, loadedRef, platformTag); err != nil {
+				return fmt.Errorf("tag image failed: %w", err)
+			}
+			img, err := daemon.Image(platformTag)
+			if err != nil {
+				return fmt.Errorf("load image failed: %w", err)
+			}
+			slog.DebugContext(ctx, "push image", "ref", platformTag.Name())
+			if err := remote.Write(platformTag, img, o.remote...); err != nil {
+				return fmt.Errorf("push image failed: %w", err)
+			}
 			adds = append(adds, mutate.IndexAddendum{
 				Add:        img,
 				Descriptor: v1.Descriptor{Platform: p},
 			})
-		}
+			return nil
+		})
 	}
-	if len(errs) > 0 {
-		return fmt.Errorf("push images failed: %w", errors.Join(errs...))
+	if err := wg.Wait(); err != nil {
+		return fmt.Errorf("push images failed: %w", err)
 	}
 	slog.DebugContext(ctx, "push manifest", "ref", ref.Name(), "plats", ps)
 	return remote.WriteIndex(ref, mutate.AppendManifests(empty.Index, adds...), o.remote...)
@@ -262,8 +264,8 @@ func buildAndPushImage(
 	}
 	if loadedRef != ref {
 		slog.DebugContext(ctx, "tag image", "ref", ref.Name(), "loadedRef", loadedRef.Name())
-		if err := tagImage(ctx, loadedRef, ref); err != nil {
-			return err
+		if err = tagImage(ctx, loadedRef, ref); err != nil {
+			return fmt.Errorf("tag image failed: %w", err)
 		}
 	}
 	img, err := daemon.Image(ref)
