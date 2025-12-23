@@ -215,8 +215,8 @@ func buildAndPushMultiplatformImage(
 	}
 	var adds []mutate.IndexAddendum
 	wg := errgroup.Group{}
-	wg.Go(func() error {
-		for _, p := range ps {
+	for _, p := range ps {
+		wg.Go(func() error {
 			loadedRef, err := buildPlatformImage(ctx, buildContext, p, ref)
 			if err != nil {
 				return err
@@ -240,9 +240,9 @@ func buildAndPushMultiplatformImage(
 				Add:        img,
 				Descriptor: v1.Descriptor{Platform: p},
 			})
-		}
-		return nil
-	})
+			return nil
+		})
+	}
 	if err := wg.Wait(); err != nil {
 		return fmt.Errorf("images build failed: %w", err)
 	}
