@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -25,7 +26,10 @@ var (
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
 			buildContext := getBuildContext()
-			ref := getImage()
+			ref, err := getImageTag()
+			if err != nil {
+				return fmt.Errorf("failed to get image: %w", err)
+			}
 			plats := getPlatforms()
 			pushImage := getPushImage()
 			acceptFlake := getAcceptFlakeConfig()
