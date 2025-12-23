@@ -2,6 +2,7 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"runtime"
@@ -93,30 +94,28 @@ func getBuildContext() string {
 	return viper.GetString("build_context")
 }
 
-func getImage() name.Tag {
+func getImage() (name.Tag, error) {
 	s := viper.GetString("image")
 	ref, err := name.NewTag(s)
 	if err != nil {
-		slog.Error("invalid image reference", "image", s, "err", err)
-		os.Exit(1)
+		return name.Tag{}, fmt.Errorf("invalid image reference: %w", err)
 	}
-	return ref
+	return ref, nil
 }
 
-func getLogLevel() slog.Level {
+func getLogLevel() (slog.Level, error) {
 	v := strings.ToLower(viper.GetString("log_level"))
 	switch v {
 	case "", "info":
-		return slog.LevelInfo
+		return slog.LevelInfo, nil
 	case "debug":
-		return slog.LevelDebug
+		return slog.LevelDebug, nil
 	case "warn", "warning":
-		return slog.LevelWarn
+		return slog.LevelWarn, nil
 	case "error", "err":
-		return slog.LevelError
+		return slog.LevelError, nil
 	default:
-		slog.Warn("invalid log level", "log_level", v)
-		return slog.LevelInfo
+		return slog.LevelInfo, fmt.Errorf("invalid log level: %s", v)
 	}
 }
 

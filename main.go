@@ -67,7 +67,10 @@ var (
 			"IMAGE=ghcr.io/you/app:latest PLATFORMS=linux/amd64 PUSH_IMAGE=true ./nix-containers build .",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			image := getImage()
+			image, err := getImage()
+			if err != nil {
+				return fmt.Errorf("failed to get image: %w", err)
+			}
 			plats := getPlatforms()
 			pushImage := getPushImage()
 			acceptFlake := getAcceptFlakeConfig()
@@ -158,9 +161,14 @@ func init() {
 }
 
 func main() {
+	logLevel, err := getLogLevel()
+	if err != nil {
+		slog.Error("get log level failed", "err", err)
+		os.Exit(1)
+	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(
 		os.Stderr,
-		&slog.HandlerOptions{Level: getLogLevel()},
+		&slog.HandlerOptions{Level: logLevel},
 	)))
 	if err := rootCmd.Execute(); err != nil {
 		slog.Error("command failed", "err", err)
