@@ -35,12 +35,15 @@ Build OCI images from Nix flakes, with optional multi-platform output and push t
 ### Direct CLI
 
 - Single platform build (no push):
+
   - `IMAGE=ghcr.io/you/app:latest ./nix-containers build .`
 
 - Multi-platform build and push via env:
+
   - `IMAGE=ghcr.io/you/app:latest PLATFORMS=linux/amd64,linux/arm64 PUSH_IMAGE=true ./nix-containers build .`
 
 - Multi-platform build via flag and accept flake config:
+
   - `IMAGE=ghcr.io/you/app:latest PUSH_IMAGE=true ./nix-containers build --platforms linux/amd64,linux/arm64 --accept-flake-config .`
 
 ### Skaffold Usage
