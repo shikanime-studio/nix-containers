@@ -67,7 +67,7 @@ var (
 			"IMAGE=ghcr.io/you/app:latest PLATFORMS=linux/amd64 PUSH_IMAGE=true ./nix-containers build .",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			image, err := getImage()
+			image, err := getImageTag()
 			if err != nil {
 				return fmt.Errorf("failed to get image: %w", err)
 			}

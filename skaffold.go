@@ -26,7 +26,7 @@ var (
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
 			buildContext := getBuildContext()
-			ref, err := getImage()
+			ref, err := getImageTag()
 			if err != nil {
 				return fmt.Errorf("failed to get image: %w", err)
 			}

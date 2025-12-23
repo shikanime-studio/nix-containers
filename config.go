@@ -94,7 +94,7 @@ func getBuildContext() string {
 	return viper.GetString("build_context")
 }
 
-func getImage() (name.Tag, error) {
+func getImageTag() (name.Tag, error) {
 	s := viper.GetString("image")
 	ref, err := name.NewTag(s)
 	if err != nil {
