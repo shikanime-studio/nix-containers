@@ -308,5 +308,5 @@ $RECYCLE.BIN/
 ###  Devlib: content  ###
 ###-------------------###
 
-__debug_bin*
 .pre-commit-config.yaml
+__debug_bin*
