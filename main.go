@@ -259,7 +259,21 @@ func buildAndPushMultiplatformImage(
 		return fmt.Errorf("push images failed: %w", err)
 	}
 	slog.DebugContext(ctx, "push manifest", "ref", ref.Name(), "plats", ps)
-	return remote.WriteIndex(ref, mutate.AppendManifests(empty.Index, adds...), o.remote...)
+	if err := remote.WriteIndex(ref, mutate.AppendManifests(empty.Index, adds...), o.remote...); err != nil {
+		return fmt.Errorf("push manifest failed: %w", err)
+	}
+	img, err := remote.Image(ref)
+	if err != nil {
+		return fmt.Errorf("pull manifest failed: %w", err)
+	}
+	tag, err := name.NewTag(ref.Name())
+	if err != nil {
+		return fmt.Errorf("failed to format manifest reference: %w", err)
+	}
+	if _, err := daemon.Write(tag, img); err != nil {
+		return fmt.Errorf("failed to write manifest to daemon: %w", err)
+	}
+	return nil
 }
 
 func buildAndPushImage(
