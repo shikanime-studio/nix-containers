@@ -55,15 +55,15 @@ func getHostPlatform() *v1.Platform {
 
 func parsePlatform(s string) *v1.Platform {
 	seg := strings.SplitN(s, "/", 2)
-	os := ""
+	operatingSystem := ""
 	arch := ""
 	if len(seg) > 0 {
-		os = seg[0]
+		operatingSystem = seg[0]
 	}
 	if len(seg) > 1 {
 		arch = seg[1]
 	}
-	return &v1.Platform{OS: os, Architecture: arch}
+	return &v1.Platform{OS: operatingSystem, Architecture: arch}
 }
 
 func getPlatforms() []*v1.Platform {
