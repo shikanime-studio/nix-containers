@@ -5,7 +5,6 @@ import (
 	"log/slog"
 
 	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/spf13/cobra"
 )
 
@@ -43,7 +42,7 @@ var (
 			)
 			opts := []BuildOption{
 				WithPush(pushImage),
-				WithRemoteOption(remote.WithAuthFromKeychain(authn.DefaultKeychain)),
+				WithKeychain(authn.DefaultKeychain),
 			}
 			if acceptFlake {
 				opts = append(opts, WithStreamLayeredImageOption(WithAcceptFlakeConfig()))

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 
 	"github.com/docker/docker/api/types/image"
@@ -23,13 +24,29 @@ import (
 type BuildOption func(*buildOption)
 
 type buildOption struct {
-	remote  []remote.Option
-	layered []layeredImageOption
-	push    bool
+	remote    []remote.Option
+	layered   []layeredImageOption
+	push      bool
+	keychain  authn.Keychain
+	transport http.RoundTripper
 }
 
 func WithRemoteOption(opt remote.Option) BuildOption {
 	return func(o *buildOption) { o.remote = append(o.remote, opt) }
+}
+
+func WithKeychain(kc authn.Keychain) BuildOption {
+	return func(o *buildOption) {
+		o.keychain = kc
+		o.remote = append(o.remote, remote.WithAuthFromKeychain(kc))
+	}
+}
+
+func WithTransport(t http.RoundTripper) BuildOption {
+	return func(o *buildOption) {
+		o.transport = t
+		o.remote = append(o.remote, remote.WithTransport(t))
+	}
 }
 
 func WithStreamLayeredImageOption(opt layeredImageOption) BuildOption {
@@ -41,7 +58,10 @@ func WithPush(push bool) BuildOption {
 }
 
 func makeBuildOption(opts ...BuildOption) *buildOption {
-	o := &buildOption{}
+	o := &buildOption{
+		keychain:  authn.DefaultKeychain,
+		transport: http.DefaultTransport,
+	}
 	for _, opt := range opts {
 		opt(o)
 	}
@@ -99,7 +119,7 @@ var (
 			)
 			opts := []BuildOption{
 				WithPush(pushImage),
-				WithRemoteOption(remote.WithAuthFromKeychain(authn.DefaultKeychain)),
+				WithKeychain(authn.DefaultKeychain),
 			}
 			if acceptFlake {
 				opts = append(opts, WithStreamLayeredImageOption(WithAcceptFlakeConfig()))
@@ -312,6 +332,17 @@ func buildAndPush(
 	plats []*v1.Platform,
 	opts ...BuildOption,
 ) error {
+	o := makeBuildOption(opts...)
+	if o.push {
+		slog.InfoContext(ctx, "checking push permission", "ref", ref.Name())
+		// CheckPushPermission is used to fail fast if the user doesn't have credentials
+		// to push to the registry. This prevents running the expensive build process
+		// only to fail at the end.
+		// See: https://github.com/google/go-containerregistry/issues/412
+		if err := remote.CheckPushPermission(ref, o.keychain, o.transport); err != nil {
+			return fmt.Errorf("check push permission failed: %w", err)
+		}
+	}
 	if len(plats) == 1 {
 		slog.DebugContext(ctx, "build image", "ref", ref.Name(), "plat", plats[0])
 		return buildAndPushImage(
