@@ -56,7 +56,7 @@
             pname = "nix-containers";
             version = "v0.1.0";
             src = lib.cleanSource ./.;
-            vendorHash = "sha256-ypaMK9nCi+Kdgd6mfml2cMAprZn3+vfk1rUNruGkuAY=";
+            vendorHash = null;
             meta = {
               description = "Nix Containers CLI";
               homepage = "https://github.com/shikanime-studio/nix-containers";
