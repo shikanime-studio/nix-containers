@@ -44,12 +44,10 @@
         { pkgs, lib, ... }:
         {
           devenv.shells.default.imports = [
-            inputs.devlib.devenvModules.docs
-            inputs.devlib.devenvModules.formats
-            inputs.devlib.devenvModules.github
-            inputs.devlib.devenvModules.go
-            inputs.devlib.devenvModules.nix
-            inputs.devlib.devenvModules.shell
+            devlib.devenvModules.github
+            devlib.devenvModules.go
+            devlib.devenvModules.nix
+            devlib.devenvModules.shell
             devlib.devenvModules.shikanime-studio
           ];
           packages.default = pkgs.buildGoModule {
