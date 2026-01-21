@@ -169,7 +169,7 @@ func buildStreamLayeredImage(
 
 	args := []string{"build"}
 	if o.acceptFlakeConfig {
-		args = append(args, "--accept-flake-config")
+		args = append(args, "--accept-flake-config", "--no-out-link")
 	}
 	args = append(args, "--json", url)
 	cmd := exec.CommandContext(ctx, "nix", args...)
