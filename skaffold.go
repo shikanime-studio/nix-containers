@@ -32,7 +32,7 @@ var (
 			plats := getPlatforms()
 			pushImage := getPushImage()
 			acceptFlake := getAcceptFlakeConfig()
-			noPureEvalFlake := getNoPureEvalFlake()
+			noPureEvalFlake := getNoPureEval()
 			slog.InfoContext(ctx,
 				"build config",
 				"image", ref.String(),
@@ -50,7 +50,7 @@ var (
 				opts = append(opts, WithStreamImageOption(WithAcceptFlakeConfig()))
 			}
 			if noPureEvalFlake {
-				opts = append(opts, WithStreamImageOption(WithNoPureEvalFlake()))
+				opts = append(opts, WithStreamImageOption(WithNoPureEval()))
 			}
 			return buildAndPush(ctx, buildContext, ref, plats, opts...)
 		},

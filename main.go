@@ -94,6 +94,7 @@ var (
 			plats := getPlatforms()
 			pushImage := getPushImage()
 			acceptFlake := getAcceptFlakeConfig()
+			noPureEval := getNoPureEval()
 			buildContext := ""
 			if len(args) > 0 {
 				buildContext = args[0]
@@ -116,6 +117,7 @@ var (
 				"build_context", buildContext,
 				"push", pushImage,
 				"accept_flake_config", acceptFlake,
+				"no_pure_eval", noPureEval,
 			)
 			opts := []BuildOption{
 				WithPush(pushImage),
@@ -123,6 +125,9 @@ var (
 			}
 			if acceptFlake {
 				opts = append(opts, WithStreamImageOption(WithAcceptFlakeConfig()))
+			}
+			if noPureEval {
+				opts = append(opts, WithStreamImageOption(WithNoPureEval()))
 			}
 			return buildAndPush(
 				ctx,
@@ -139,6 +144,12 @@ func init() {
 		Bool("accept-flake-config", false, "accept nix flake config during build")
 	if err := viper.BindPFlag("accept_flake_config", rootCmd.PersistentFlags().Lookup("accept-flake-config")); err != nil {
 		slog.Error("bind flag failed", "flag", "accept-flake-config", "err", err)
+		os.Exit(1)
+	}
+	rootCmd.PersistentFlags().
+		Bool("no-pure-eval", false, "disable pure evaluation of nix expressions")
+	if err := viper.BindPFlag("no_pure_eval", rootCmd.PersistentFlags().Lookup("no-pure-eval")); err != nil {
+		slog.Error("bind flag failed", "flag", "no-pure-eval", "err", err)
 		os.Exit(1)
 	}
 	rootCmd.AddCommand(buildCmd)
