@@ -24,6 +24,10 @@ var (
 		Example: "IMAGE=ghcr.io/you/app:latest PLATFORMS=linux/amd64 PUSH_IMAGE=true BUILD_CONTEXT=. ACCEPT_FLAKE_CONFIG=true ./nix-containers skaffold build",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := cmd.Context()
+			debug := getDebug()
+			if debug {
+				slog.SetLogLoggerLevel(slog.LevelDebug)
+			}
 			buildContext := getBuildContext()
 			ref, err := getImageTag()
 			if err != nil {
@@ -41,6 +45,7 @@ var (
 				"push", pushImage,
 				"accept_flake_config", acceptFlake,
 				"no_pure_eval_flake", noPureEvalFlake,
+				"debug", debug,
 			)
 			opts := []BuildOption{
 				WithPush(pushImage),
