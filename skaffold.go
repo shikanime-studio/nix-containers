@@ -45,7 +45,7 @@ var (
 				WithKeychain(authn.DefaultKeychain),
 			}
 			if acceptFlake {
-				opts = append(opts, WithStreamLayeredImageOption(WithAcceptFlakeConfig()))
+				opts = append(opts, WithStreamImageOption(WithAcceptFlakeConfig()))
 			}
 			return buildAndPush(ctx, buildContext, ref, plats, opts...)
 		},

@@ -17,16 +17,16 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// PackageType indicates the type of a Nix flake package.
-type PackageType int
+// BuilderType indicates the type of a Nix flake package.
+type BuilderType int
 
 const (
-	// UnknownPackageType indicates the package type is unknown.
-	UnknownPackageType PackageType = iota
-	// StreamPackageType indicates a streamable image package.
-	StreamPackageType
-	// TarGzPackageType indicates a tar.gz package.
-	TarGzPackageType
+	// UnknownBuilderType indicates the package type is unknown.
+	UnknownBuilderType BuilderType = iota
+	// StreamBuilderType indicates a streamable image package.
+	StreamBuilderType
+	// TarGzBuilderType indicates a tar.gz package.
+	TarGzBuilderType
 )
 
 type flakeShowPackage struct {
@@ -38,24 +38,30 @@ type flakeShowOutput struct {
 	Packages map[string]map[string]flakeShowPackage `json:"packages"`
 }
 
-func checkImageBuilderType(
+func getImageBuilderType(
 	ctx context.Context,
 	buildContext string,
 	ref name.Reference,
 	p *v1.Platform,
-) (PackageType, error) {
-	args := []string{"flake", "show", "--no-pure-eval", "--json", "--all-systems", buildContext}
+	opts ...imageOption,
+) (BuilderType, error) {
+	o := makeImageOptions(opts...)
+
+	args := []string{"flake", "show", "--json", "--all-systems", buildContext}
+	if o.noPureEvalFlake {
+		args = append(args, "--no-pure-eval")
+	}
 	cmd := exec.CommandContext(ctx, "nix", args...)
 	slog.DebugContext(ctx, "checking image builder type", "cmd", cmd.Path, "args", args)
 
 	output, err := cmd.Output()
 	if err != nil {
-		return UnknownPackageType, fmt.Errorf("failed to run nix flake show: %w", err)
+		return UnknownBuilderType, fmt.Errorf("failed to run nix flake show: %w", err)
 	}
 
 	var showOutput flakeShowOutput
 	if err := json.Unmarshal(output, &showOutput); err != nil {
-		return UnknownPackageType, fmt.Errorf("failed to parse nix flake show output: %w", err)
+		return UnknownBuilderType, fmt.Errorf("failed to parse nix flake show output: %w", err)
 	}
 
 	system := formatSystemName(p)
@@ -63,22 +69,22 @@ func checkImageBuilderType(
 
 	pkgs, ok := showOutput.Packages[system]
 	if !ok {
-		return UnknownPackageType, fmt.Errorf("system %s not found in flake output", system)
+		return UnknownBuilderType, fmt.Errorf("system %s not found in flake output", system)
 	}
 
 	pkg, ok := pkgs[pkgName]
 	if !ok {
-		return UnknownPackageType, fmt.Errorf("package %s not found for system %s", pkgName, system)
+		return UnknownBuilderType, fmt.Errorf("package %s not found for system %s", pkgName, system)
 	}
 
 	if strings.HasPrefix(pkg.Name, "stream-") {
-		return StreamPackageType, nil
+		return StreamBuilderType, nil
 	}
 	if strings.HasSuffix(pkg.Name, ".tar.gz") {
-		return TarGzPackageType, nil
+		return TarGzBuilderType, nil
 	}
 
-	return UnknownPackageType, nil
+	return UnknownBuilderType, nil
 }
 
 type imageLoadProgress struct {
@@ -135,12 +141,12 @@ func readImageLoadedRef(
 	return nil, fmt.Errorf("failed to read loaded ref")
 }
 
-func loadLayeredImage(
+func loadImage(
 	ctx context.Context,
 	ref name.Reference,
 	path string,
 ) (name.Reference, error) {
-	slog.InfoContext(ctx, "streaming layered image", "image", ref)
+	slog.InfoContext(ctx, "load image", "image", ref)
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		return nil, fmt.Errorf("create docker client failed: %w", err)
@@ -167,7 +173,7 @@ func loadLayeredImage(
 	return loadedRef, nil
 }
 
-func loadStreamLayeredImage(
+func loadStreamImage(
 	ctx context.Context,
 	ref name.Reference,
 	path string,
@@ -204,7 +210,7 @@ func loadStreamLayeredImage(
 		return nil
 	})
 
-	slog.InfoContext(ctx, "streaming layered image", "image", ref)
+	slog.InfoContext(ctx, "streaming image", "image", ref)
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		return nil, fmt.Errorf("create docker client failed: %w", err)
@@ -233,18 +239,23 @@ func loadStreamLayeredImage(
 	return loadedRef, nil
 }
 
-type layeredImageOption func(*layeredImageOptions)
+type imageOption func(*imageOptions)
 
-type layeredImageOptions struct {
+type imageOptions struct {
 	acceptFlakeConfig bool
+	noPureEvalFlake   bool
 }
 
-func WithAcceptFlakeConfig() layeredImageOption {
-	return func(o *layeredImageOptions) { o.acceptFlakeConfig = true }
+func WithAcceptFlakeConfig() imageOption {
+	return func(o *imageOptions) { o.acceptFlakeConfig = true }
 }
 
-func makeLayeredImageOptions(opts ...layeredImageOption) *layeredImageOptions {
-	o := &layeredImageOptions{}
+func WithNoPureEvalFlake() imageOption {
+	return func(o *imageOptions) { o.noPureEvalFlake = true }
+}
+
+func makeImageOptions(opts ...imageOption) *imageOptions {
+	o := &imageOptions{}
 	for _, opt := range opts {
 		opt(o)
 	}
@@ -258,12 +269,12 @@ type buildImageBuildResult struct {
 	StopTime  int64             `json:"stopTime"`
 }
 
-func buildLayeredImage(
+func buildImage(
 	ctx context.Context,
 	url string,
-	opts ...layeredImageOption,
+	opts ...imageOption,
 ) (string, error) {
-	o := makeLayeredImageOptions(opts...)
+	o := makeImageOptions(opts...)
 
 	args := []string{"build"}
 	if o.acceptFlakeConfig {
