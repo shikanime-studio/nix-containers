@@ -29,8 +29,8 @@ func formatPlatformReference(ref name.Reference, p *v1.Platform) (*name.Tag, err
 	return &tag, nil
 }
 
-func formatSystemName(osname, arch string) string {
-	return fmt.Sprintf("%s-%s", osname, formatArch(arch))
+func formatSystemName(p *v1.Platform) string {
+	return fmt.Sprintf("%s-%s", formatArch(p.Architecture), p.OS)
 }
 
 func formatNixFlakePackageName(ref name.Reference) string {
@@ -41,10 +41,9 @@ func formatNixFlakePackageName(ref name.Reference) string {
 
 func formatNixFlakePackage(buildContext string, ref name.Reference, p *v1.Platform) string {
 	return fmt.Sprintf(
-		"%s#packages.%s-%s.%s",
+		"%s#packages.%s.%s",
 		buildContext,
-		formatArch(p.Architecture),
-		p.OS,
+		formatSystemName(p),
 		formatNixFlakePackageName(ref),
 	)
 }
