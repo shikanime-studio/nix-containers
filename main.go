@@ -156,6 +156,12 @@ func init() {
 		slog.Error("bind flag failed", "flag", "no-pure-eval", "err", err)
 		os.Exit(1)
 	}
+	rootCmd.PersistentFlags().
+		Bool("debug", false, "enable debug logging")
+	if err := viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug")); err != nil {
+		slog.Error("bind flag failed", "flag", "debug", "err", err)
+		os.Exit(1)
+	}
 	rootCmd.AddCommand(buildCmd)
 	buildCmd.Flags().String(
 		"image",
