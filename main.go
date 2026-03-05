@@ -25,7 +25,7 @@ type BuildOption func(*buildOption)
 
 type buildOption struct {
 	remote    []remote.Option
-	layered   []layeredImageOption
+	imageOpts []imageOption
 	push      bool
 	keychain  authn.Keychain
 	transport http.RoundTripper
@@ -49,8 +49,8 @@ func WithTransport(t http.RoundTripper) BuildOption {
 	}
 }
 
-func WithStreamLayeredImageOption(opt layeredImageOption) BuildOption {
-	return func(o *buildOption) { o.layered = append(o.layered, opt) }
+func WithStreamImageOption(opt imageOption) BuildOption {
+	return func(o *buildOption) { o.imageOpts = append(o.imageOpts, opt) }
 }
 
 func WithPush(push bool) BuildOption {
@@ -122,7 +122,7 @@ var (
 				WithKeychain(authn.DefaultKeychain),
 			}
 			if acceptFlake {
-				opts = append(opts, WithStreamLayeredImageOption(WithAcceptFlakeConfig()))
+				opts = append(opts, WithStreamImageOption(WithAcceptFlakeConfig()))
 			}
 			return buildAndPush(
 				ctx,
@@ -222,28 +222,28 @@ func buildPlatformImage(
 	o := makeBuildOption(opts...)
 	slog.InfoContext(ctx, "build image", "ref", ref.Name(), "os", p.OS, "arch", p.Architecture)
 
-	path, err := buildLayeredImage(
+	path, err := buildImage(
 		ctx,
 		formatNixFlakePackage(buildContext, ref, p),
-		o.layered...,
+		o.imageOpts...,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("build layered image failed: %w", err)
+		return nil, fmt.Errorf("build image failed: %w", err)
 	}
 
-	packageType, err := checkImageBuilderType(ctx, buildContext, ref, p)
+	builderType, err := getImageBuilderType(ctx, buildContext, ref, p, o.imageOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("check image builder type failed: %w", err)
 	}
 
-	if packageType == StreamPackageType {
-		return loadStreamLayeredImage(ctx, ref, path)
+	if builderType == StreamBuilderType {
+		return loadStreamImage(ctx, ref, path)
 	}
-	if packageType == TarGzPackageType {
-		return loadLayeredImage(ctx, ref, path)
+	if builderType == TarGzBuilderType {
+		return loadImage(ctx, ref, path)
 	}
 
-	return nil, fmt.Errorf("unknown package type: %d", packageType)
+	return nil, fmt.Errorf("unknown builder type: %d", builderType)
 }
 
 func buildAndPushMultiplatformImage(

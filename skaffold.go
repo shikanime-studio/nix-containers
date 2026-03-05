@@ -32,6 +32,7 @@ var (
 			plats := getPlatforms()
 			pushImage := getPushImage()
 			acceptFlake := getAcceptFlakeConfig()
+			noPureEvalFlake := getNoPureEvalFlake()
 			slog.InfoContext(ctx,
 				"build config",
 				"image", ref.String(),
@@ -39,13 +40,17 @@ var (
 				"build_context", buildContext,
 				"push", pushImage,
 				"accept_flake_config", acceptFlake,
+				"no_pure_eval_flake", noPureEvalFlake,
 			)
 			opts := []BuildOption{
 				WithPush(pushImage),
 				WithKeychain(authn.DefaultKeychain),
 			}
 			if acceptFlake {
-				opts = append(opts, WithStreamLayeredImageOption(WithAcceptFlakeConfig()))
+				opts = append(opts, WithStreamImageOption(WithAcceptFlakeConfig()))
+			}
+			if noPureEvalFlake {
+				opts = append(opts, WithStreamImageOption(WithNoPureEvalFlake()))
 			}
 			return buildAndPush(ctx, buildContext, ref, plats, opts...)
 		},

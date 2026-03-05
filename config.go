@@ -127,3 +127,7 @@ func getAcceptFlakeConfig() bool {
 		return false
 	}
 }
+
+func getNoPureEvalFlake() bool {
+	return viper.GetBool("no_pure_eval_flake")
+}
