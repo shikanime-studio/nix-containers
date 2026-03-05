@@ -44,7 +44,6 @@
         { pkgs, lib, ... }:
         {
           devenv.shells.default.imports = [
-            devlib.devenvModules.github
             devlib.devenvModules.go
             devlib.devenvModules.nix
             devlib.devenvModules.shell
