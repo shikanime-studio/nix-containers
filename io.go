@@ -58,7 +58,7 @@ func checkImageBuilderType(
 		return UnknownPackageType, fmt.Errorf("failed to parse nix flake show output: %w", err)
 	}
 
-	system := formatSystemName(p.OS, p.Architecture)
+	system := formatSystemName(p)
 	pkgName := formatNixFlakePackageName(ref)
 
 	pkgs, ok := showOutput.Packages[system]
