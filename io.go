@@ -255,7 +255,10 @@ func WithNoPureEvalFlake() imageOption {
 }
 
 func makeImageOptions(opts ...imageOption) *imageOptions {
-	o := &imageOptions{}
+	o := &imageOptions{
+		acceptFlakeConfig: true,
+		noPureEvalFlake:   true,
+	}
 	for _, opt := range opts {
 		opt(o)
 	}
