@@ -19,6 +19,7 @@ Build OCI images from Nix flakes, with optional multi-platform output and push t
 - Global:
   - `--accept-flake-config` Accept Nix flake configuration during build (also via `ACCEPT_FLAKE_CONFIG`).
 - Build command:
+  - `--no-pure-eval` Disable pure evaluation of Nix expressions (also via `NO_PURE_EVAL`).
   - `--platforms` Comma-separated platforms in `os/arch` form (e.g., `linux/amd64,linux/arm64`). Overrides `PLATFORMS` env.
 
 ## Environment Variables

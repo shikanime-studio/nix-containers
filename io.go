@@ -48,7 +48,7 @@ func getImageBuilderType(
 	o := makeImageOptions(opts...)
 
 	args := []string{"flake", "show", "--json", "--all-systems", buildContext}
-	if o.noPureEvalFlake {
+	if o.noPureEval {
 		args = append(args, "--no-pure-eval")
 	}
 	cmd := exec.CommandContext(ctx, "nix", args...)
@@ -243,21 +243,21 @@ type imageOption func(*imageOptions)
 
 type imageOptions struct {
 	acceptFlakeConfig bool
-	noPureEvalFlake   bool
+	noPureEval        bool
 }
 
 func WithAcceptFlakeConfig() imageOption {
 	return func(o *imageOptions) { o.acceptFlakeConfig = true }
 }
 
-func WithNoPureEvalFlake() imageOption {
-	return func(o *imageOptions) { o.noPureEvalFlake = true }
+func WithNoPureEval() imageOption {
+	return func(o *imageOptions) { o.noPureEval = true }
 }
 
 func makeImageOptions(opts ...imageOption) *imageOptions {
 	o := &imageOptions{
 		acceptFlakeConfig: true,
-		noPureEvalFlake:   true,
+		noPureEval:        true,
 	}
 	for _, opt := range opts {
 		opt(o)
