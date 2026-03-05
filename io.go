@@ -7,13 +7,79 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/docker/docker/client"
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"golang.org/x/sync/errgroup"
 )
+
+// PackageType indicates the type of a Nix flake package.
+type PackageType int
+
+const (
+	// UnknownPackageType indicates the package type is unknown.
+	UnknownPackageType PackageType = iota
+	// StreamPackageType indicates a streamable image package.
+	StreamPackageType
+	// TarGzPackageType indicates a tar.gz package.
+	TarGzPackageType
+)
+
+type flakeShowPackage struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+type flakeShowOutput struct {
+	Packages map[string]map[string]flakeShowPackage `json:"packages"`
+}
+
+func checkImageBuilderType(
+	ctx context.Context,
+	buildContext string,
+	ref name.Reference,
+	p *v1.Platform,
+) (PackageType, error) {
+	args := []string{"flake", "show", "--no-pure-eval", "--json", "--all-systems", buildContext}
+	cmd := exec.CommandContext(ctx, "nix", args...)
+	slog.DebugContext(ctx, "checking image builder type", "cmd", cmd.Path, "args", args)
+
+	output, err := cmd.Output()
+	if err != nil {
+		return UnknownPackageType, fmt.Errorf("failed to run nix flake show: %w", err)
+	}
+
+	var showOutput flakeShowOutput
+	if err := json.Unmarshal(output, &showOutput); err != nil {
+		return UnknownPackageType, fmt.Errorf("failed to parse nix flake show output: %w", err)
+	}
+
+	system := formatSystemName(p.OS, p.Architecture)
+	pkgName := formatNixFlakePackageName(ref)
+
+	pkgs, ok := showOutput.Packages[system]
+	if !ok {
+		return UnknownPackageType, fmt.Errorf("system %s not found in flake output", system)
+	}
+
+	pkg, ok := pkgs[pkgName]
+	if !ok {
+		return UnknownPackageType, fmt.Errorf("package %s not found for system %s", pkgName, system)
+	}
+
+	if strings.HasPrefix(pkg.Name, "stream-") {
+		return StreamPackageType, nil
+	}
+	if strings.HasSuffix(pkg.Name, ".tar.gz") {
+		return TarGzPackageType, nil
+	}
+
+	return UnknownPackageType, nil
+}
 
 type imageLoadProgress struct {
 	Status         string         `json:"status"`
@@ -67,6 +133,38 @@ func readImageLoadedRef(
 		}
 	}
 	return nil, fmt.Errorf("failed to read loaded ref")
+}
+
+func loadLayeredImage(
+	ctx context.Context,
+	ref name.Reference,
+	path string,
+) (name.Reference, error) {
+	slog.InfoContext(ctx, "streaming layered image", "image", ref)
+	cli, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		return nil, fmt.Errorf("create docker client failed: %w", err)
+	}
+	cli.NegotiateAPIVersion(ctx)
+
+	input, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open image: %w", err)
+	}
+	defer func() { _ = input.Close() }()
+	resp, err := cli.ImageLoad(ctx, input)
+	if err != nil {
+		return nil, fmt.Errorf("docker image load failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	r := bufio.NewReader(resp.Body)
+
+	loadedRef, err := readImageLoadedRef(ctx, r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read loaded ref: %w", err)
+	}
+
+	return loadedRef, nil
 }
 
 func loadStreamLayeredImage(
@@ -153,14 +251,14 @@ func makeLayeredImageOptions(opts ...layeredImageOption) *layeredImageOptions {
 	return o
 }
 
-type streamLayeredImageBuildResult struct {
+type buildImageBuildResult struct {
 	DrvPath   string            `json:"drvPath"`
 	Outputs   map[string]string `json:"outputs"`
 	StartTime int64             `json:"startTime"`
 	StopTime  int64             `json:"stopTime"`
 }
 
-func buildStreamLayeredImage(
+func buildLayeredImage(
 	ctx context.Context,
 	url string,
 	opts ...layeredImageOption,
@@ -205,7 +303,7 @@ func buildStreamLayeredImage(
 		return nil
 	})
 
-	var result []*streamLayeredImageBuildResult
+	var result []*buildImageBuildResult
 	if err := dec.Decode(&result); err != nil {
 		return "", fmt.Errorf("failed to parse nix build output: %w", err)
 	}
