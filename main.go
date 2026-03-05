@@ -221,7 +221,7 @@ func buildPlatformImage(
 ) (name.Reference, error) {
 	o := makeBuildOption(opts...)
 	slog.InfoContext(ctx, "build image", "ref", ref.Name(), "os", p.OS, "arch", p.Architecture)
-	path, err := buildStreamLayeredImage(
+	path, err := buildLayeredImage(
 		ctx,
 		formatNixFlakePackage(buildContext, ref, p),
 		o.layered...,
@@ -229,7 +229,7 @@ func buildPlatformImage(
 	if err != nil {
 		return nil, fmt.Errorf("build stream layered image failed: %w", err)
 	}
-	return loadStreamLayeredImage(ctx, ref, path)
+	return loadLayeredImage(ctx, ref, path)
 }
 
 func buildAndPushMultiplatformImage(

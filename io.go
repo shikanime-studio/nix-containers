@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -69,43 +70,11 @@ func readImageLoadedRef(
 	return nil, fmt.Errorf("failed to read loaded ref")
 }
 
-func loadStreamLayeredImage(
+func loadLayeredImage(
 	ctx context.Context,
 	ref name.Reference,
 	path string,
 ) (name.Reference, error) {
-	cmd := exec.CommandContext(ctx, path)
-
-	stdoutPipe, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-	stream := bufio.NewReader(stdoutPipe)
-
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-	sc := bufio.NewScanner(stderrPipe)
-
-	if err = cmd.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start stream command: %w", err)
-	}
-
-	wg := errgroup.Group{}
-	wg.Go(func() error {
-		for sc.Scan() {
-			line := strings.TrimSpace(sc.Text())
-			if line != "" {
-				slog.DebugContext(ctx, line, "cmd", cmd.Path)
-			}
-		}
-		if err = sc.Err(); err != nil {
-			return fmt.Errorf("stderr scan failed: %w", err)
-		}
-		return nil
-	})
-
 	slog.InfoContext(ctx, "streaming layered image", "image", ref)
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
@@ -113,7 +82,12 @@ func loadStreamLayeredImage(
 	}
 	cli.NegotiateAPIVersion(ctx)
 
-	resp, err := cli.ImageLoad(ctx, stream)
+	input, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open image: %w", err)
+	}
+	defer func() { _ = input.Close() }()
+	resp, err := cli.ImageLoad(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("docker image load failed: %w", err)
 	}
@@ -123,13 +97,6 @@ func loadStreamLayeredImage(
 	loadedRef, err := readImageLoadedRef(ctx, r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read loaded ref: %w", err)
-	}
-
-	if err = wg.Wait(); err != nil {
-		return nil, fmt.Errorf("failed to wait for stream command: %w", err)
-	}
-	if err = cmd.Wait(); err != nil {
-		return nil, fmt.Errorf("failed to wait for command: %w", err)
 	}
 
 	return loadedRef, nil
@@ -153,14 +120,14 @@ func makeLayeredImageOptions(opts ...layeredImageOption) *layeredImageOptions {
 	return o
 }
 
-type streamLayeredImageBuildResult struct {
+type buildImageBuildResult struct {
 	DrvPath   string            `json:"drvPath"`
 	Outputs   map[string]string `json:"outputs"`
 	StartTime int64             `json:"startTime"`
 	StopTime  int64             `json:"stopTime"`
 }
 
-func buildStreamLayeredImage(
+func buildLayeredImage(
 	ctx context.Context,
 	url string,
 	opts ...layeredImageOption,
@@ -205,7 +172,7 @@ func buildStreamLayeredImage(
 		return nil
 	})
 
-	var result []*streamLayeredImageBuildResult
+	var result []*buildImageBuildResult
 	if err := dec.Decode(&result); err != nil {
 		return "", fmt.Errorf("failed to parse nix build output: %w", err)
 	}
