@@ -55,10 +55,6 @@ func init() {
 		slog.Error("bind env failed", "env", "DEBUG", "key", "debug", "err", err)
 		os.Exit(1)
 	}
-	if err := viper.BindEnv("actions_step_debug", "ACTIONS_STEP_DEBUG"); err != nil {
-		slog.Error("bind env failed", "env", "ACTIONS_STEP_DEBUG", "key", "actions_step_debug", "err", err)
-		os.Exit(1)
-	}
 }
 
 func getHostPlatform() *v1.Platform {
