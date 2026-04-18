@@ -20,7 +20,11 @@ func TestFormatNixFlakePackage(t *testing.T) {
 		t.Fatalf("parse reference failed: %v", err)
 	}
 
-	got := formatNixFlakePackage("/workspace", ref, &v1.Platform{OS: "linux", Architecture: "amd64"})
+	got := formatNixFlakePackage(
+		"/workspace",
+		ref,
+		&v1.Platform{OS: "linux", Architecture: "amd64"},
+	)
 	want := "/workspace#packages.x86_64-linux.catbox"
 	if got != want {
 		t.Fatalf("expected %s, got %s", want, got)
