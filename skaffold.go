@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/spf13/cobra"
 )
 
@@ -49,7 +48,6 @@ var (
 			)
 			opts := []BuildOption{
 				WithPush(pushImage),
-				WithKeychain(authn.DefaultKeychain),
 			}
 			if acceptFlake {
 				opts = append(opts, WithStreamImageOption(WithAcceptFlakeConfig()))
@@ -57,7 +55,12 @@ var (
 			if noPureEvalFlake {
 				opts = append(opts, WithStreamImageOption(WithNoPureEval()))
 			}
-			return buildAndPush(ctx, buildContext, ref, plats, opts...)
+			container, err := NewContainerClient(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to create container client: %w", err)
+			}
+			builder := NewBuilder(NewNixClient(), container, opts...)
+			return builder.BuildAndPush(ctx, buildContext, ref, plats)
 		},
 	}
 )
