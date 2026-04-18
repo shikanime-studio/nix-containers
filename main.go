@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"sync"
 
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
@@ -256,11 +257,43 @@ func buildPlatformImage(
 	if err != nil {
 		return nil, fmt.Errorf("check image builder type failed: %w", err)
 	}
+	slog.InfoContext(
+		ctx,
+		"image builder type resolved",
+		"ref",
+		ref.Name(),
+		"platform",
+		formatSystemName(p),
+		"builder_type",
+		builderType,
+		"path",
+		path,
+	)
 
 	if builderType == StreamBuilderType {
+		slog.InfoContext(
+			ctx,
+			"load stream image",
+			"ref",
+			ref.Name(),
+			"platform",
+			formatSystemName(p),
+			"path",
+			path,
+		)
 		return loadStreamImage(ctx, ref, path)
 	}
 	if builderType == TarGzBuilderType {
+		slog.InfoContext(
+			ctx,
+			"load archive image",
+			"ref",
+			ref.Name(),
+			"platform",
+			formatSystemName(p),
+			"path",
+			path,
+		)
 		return loadImage(ctx, ref, path)
 	}
 
@@ -281,42 +314,113 @@ func buildAndPushMultiplatformImage(
 		)
 	}
 	var adds []mutate.IndexAddendum
+	var addsMu sync.Mutex
+	slog.InfoContext(ctx, "build multiplatform image", "ref", ref.Name(), "platform_count", len(ps))
 	wg, ctx := errgroup.WithContext(ctx)
 	for _, p := range ps {
+		p := p
 		wg.Go(func() error {
+			slog.InfoContext(
+				ctx,
+				"platform pipeline started",
+				"ref",
+				ref.Name(),
+				"platform",
+				formatSystemName(p),
+			)
 			loadedRef, err := buildPlatformImage(ctx, buildContext, p, ref)
 			if err != nil {
 				return err
 			}
+			slog.InfoContext(
+				ctx,
+				"platform image loaded",
+				"ref",
+				ref.Name(),
+				"platform",
+				formatSystemName(p),
+				"loaded_ref",
+				loadedRef.Name(),
+			)
 			platformTag, err := formatPlatformReference(ref, p)
 			if err != nil {
 				return fmt.Errorf("format platform reference failed: %w", err)
 			}
+			slog.InfoContext(
+				ctx,
+				"tag platform image",
+				"ref",
+				ref.Name(),
+				"platform",
+				formatSystemName(p),
+				"platform_ref",
+				platformTag.Name(),
+			)
 			if err = tagImage(ctx, loadedRef, platformTag); err != nil {
 				return fmt.Errorf("tag image failed: %w", err)
 			}
+			slog.InfoContext(
+				ctx,
+				"platform image tagged",
+				"ref",
+				ref.Name(),
+				"platform",
+				formatSystemName(p),
+				"platform_ref",
+				platformTag.Name(),
+			)
 			img, err := daemon.Image(platformTag)
 			if err != nil {
 				return fmt.Errorf("load image failed: %w", err)
 			}
-			slog.DebugContext(ctx, "push image", "ref", platformTag.Name())
+			slog.InfoContext(
+				ctx,
+				"push platform image",
+				"ref",
+				ref.Name(),
+				"platform",
+				formatSystemName(p),
+				"platform_ref",
+				platformTag.Name(),
+			)
 			if err := remote.Write(platformTag, img, o.remote...); err != nil {
 				return fmt.Errorf("push image failed: %w", err)
 			}
+			slog.InfoContext(
+				ctx,
+				"platform image pushed",
+				"ref",
+				ref.Name(),
+				"platform",
+				formatSystemName(p),
+				"platform_ref",
+				platformTag.Name(),
+			)
+			addsMu.Lock()
 			adds = append(adds, mutate.IndexAddendum{
 				Add:        img,
 				Descriptor: v1.Descriptor{Platform: p},
 			})
+			addsMu.Unlock()
+			slog.InfoContext(
+				ctx,
+				"platform pipeline completed",
+				"ref",
+				ref.Name(),
+				"platform",
+				formatSystemName(p),
+			)
 			return nil
 		})
 	}
 	if err := wg.Wait(); err != nil {
 		return fmt.Errorf("push images failed: %w", err)
 	}
-	slog.DebugContext(ctx, "push manifest", "ref", ref.Name(), "plats", ps)
+	slog.InfoContext(ctx, "push manifest", "ref", ref.Name(), "platform_count", len(adds))
 	if err := remote.WriteIndex(ref, mutate.AppendManifests(empty.Index, adds...), o.remote...); err != nil {
 		return fmt.Errorf("push manifest failed: %w", err)
 	}
+	slog.InfoContext(ctx, "manifest pushed", "ref", ref.Name(), "platform_count", len(adds))
 	img, err := remote.Image(ref)
 	if err != nil {
 		return fmt.Errorf("pull manifest failed: %w", err)
@@ -328,6 +432,7 @@ func buildAndPushMultiplatformImage(
 	if _, err := daemon.Write(tag, img); err != nil {
 		return fmt.Errorf("failed to write manifest to daemon: %w", err)
 	}
+	slog.InfoContext(ctx, "manifest written to daemon", "ref", ref.Name())
 	return nil
 }
 

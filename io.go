@@ -78,12 +78,54 @@ func getImageBuilderType(
 	}
 
 	if strings.HasPrefix(pkg.Name, "stream-") {
+		slog.InfoContext(
+			ctx,
+			"resolved builder type",
+			"ref",
+			ref.Name(),
+			"system",
+			system,
+			"package",
+			pkgName,
+			"builder_type",
+			StreamBuilderType,
+			"artifact_name",
+			pkg.Name,
+		)
 		return StreamBuilderType, nil
 	}
 	if strings.HasSuffix(pkg.Name, ".tar.gz") {
+		slog.InfoContext(
+			ctx,
+			"resolved builder type",
+			"ref",
+			ref.Name(),
+			"system",
+			system,
+			"package",
+			pkgName,
+			"builder_type",
+			TarGzBuilderType,
+			"artifact_name",
+			pkg.Name,
+		)
 		return TarGzBuilderType, nil
 	}
 
+	slog.WarnContext(
+		ctx,
+		"resolved builder type",
+		"ref",
+		ref.Name(),
+		"system",
+		system,
+		"package",
+		pkgName,
+		"builder_type",
+		UnknownBuilderType,
+		"artifact_name",
+		pkg.Name,
+	)
 	return UnknownBuilderType, nil
 }
 
@@ -146,7 +188,7 @@ func loadImage(
 	ref name.Reference,
 	path string,
 ) (name.Reference, error) {
-	slog.InfoContext(ctx, "load image", "image", ref)
+	slog.InfoContext(ctx, "load image", "image", ref, "path", path)
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		return nil, fmt.Errorf("create docker client failed: %w", err)
@@ -178,6 +220,7 @@ func loadStreamImage(
 	ref name.Reference,
 	path string,
 ) (name.Reference, error) {
+	slog.InfoContext(ctx, "start stream image command", "image", ref, "path", path)
 	cmd := exec.CommandContext(ctx, path)
 
 	stdoutPipe, err := cmd.StdoutPipe()
@@ -236,6 +279,7 @@ func loadStreamImage(
 		return nil, fmt.Errorf("failed to wait for command: %w", err)
 	}
 
+	slog.InfoContext(ctx, "stream image command completed", "image", ref, "path", path)
 	return loadedRef, nil
 }
 
@@ -285,7 +329,7 @@ func buildImage(
 	}
 	args = append(args, "--json", url)
 	cmd := exec.CommandContext(ctx, "nix", args...)
-	slog.DebugContext(ctx, "running command", "cmd", cmd.Path, "args", args)
+	slog.InfoContext(ctx, "start nix build", "url", url, "args", args)
 
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
@@ -337,6 +381,16 @@ func buildImage(
 		"url", url,
 		"drvPath", result[0].DrvPath,
 		"out", result[0].Outputs["out"],
+	)
+	slog.InfoContext(
+		ctx,
+		"nix build completed",
+		"url",
+		url,
+		"drv_path",
+		result[0].DrvPath,
+		"out",
+		result[0].Outputs["out"],
 	)
 	return result[0].Outputs["out"], nil
 }
