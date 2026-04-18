@@ -62,6 +62,22 @@ func formatNixBuildError(err error, stderr string) error {
 	return fmt.Errorf("%w: %s", err, stderr)
 }
 
+func handleNixBuildError(
+	ctx context.Context,
+	url string,
+	err error,
+	stderrOutput *strings.Builder,
+	stderrMu *sync.Mutex,
+) error {
+	stderrMu.Lock()
+	stderr := stderrOutput.String()
+	stderrMu.Unlock()
+
+	err = formatNixBuildError(err, stderr)
+	slog.ErrorContext(ctx, "nix build failed", "url", url, "err", err)
+	return err
+}
+
 func handleNixBuild(
 	sc *bufio.Scanner,
 	stderrOutput *strings.Builder,
@@ -250,32 +266,32 @@ func (n *NixClient) BuildImage(
 
 	var result []*buildImageBuildResult
 	if err := dec.Decode(&result); err != nil {
-		stderrMu.Lock()
-		stderr := stderrOutput.String()
-		stderrMu.Unlock()
-		err = formatNixBuildError(
+		return "", handleNixBuildError(
+			ctx,
+			url,
 			fmt.Errorf("failed to parse nix build output: %w", err),
-			stderr,
+			&stderrOutput,
+			&stderrMu,
 		)
-		slog.ErrorContext(ctx, "nix build failed", "url", url, "err", err)
-		return "", err
 	}
 
 	if err := wg.Wait(); err != nil {
-		stderrMu.Lock()
-		stderr := stderrOutput.String()
-		stderrMu.Unlock()
-		err = formatNixBuildError(fmt.Errorf("failed to wait for command: %w", err), stderr)
-		slog.ErrorContext(ctx, "nix build failed", "url", url, "err", err)
-		return "", err
+		return "", handleNixBuildError(
+			ctx,
+			url,
+			fmt.Errorf("failed to wait for command: %w", err),
+			&stderrOutput,
+			&stderrMu,
+		)
 	}
 	if err := cmd.Wait(); err != nil {
-		stderrMu.Lock()
-		stderr := stderrOutput.String()
-		stderrMu.Unlock()
-		err = formatNixBuildError(fmt.Errorf("failed to wait for command: %w", err), stderr)
-		slog.ErrorContext(ctx, "nix build failed", "url", url, "err", err)
-		return "", err
+		return "", handleNixBuildError(
+			ctx,
+			url,
+			fmt.Errorf("failed to wait for command: %w", err),
+			&stderrOutput,
+			&stderrMu,
+		)
 	}
 
 	if len(result) == 0 {
