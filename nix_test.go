@@ -22,6 +22,7 @@ var commandStubMu sync.Mutex
 func stubCommand(
 	t testing.TB,
 	stdout, stderr string,
+	exitCode int,
 	argsFile string,
 ) func(context.Context, string, ...string) *exec.Cmd {
 	t.Helper()
@@ -37,7 +38,7 @@ func stubCommand(
 			"GO_WANT_HELPER_PROCESS=1",
 			fmt.Sprintf("FAKE_STDOUT=%s", stdout),
 			fmt.Sprintf("FAKE_STDERR=%s", stderr),
-			"FAKE_EXIT_CODE=0",
+			fmt.Sprintf("FAKE_EXIT_CODE=%d", exitCode),
 		)
 		if argsFile != "" {
 			cmd.Env = append(cmd.Env, fmt.Sprintf("FAKE_ARGS_FILE=%s", argsFile))
@@ -46,7 +47,7 @@ func stubCommand(
 	}
 }
 
-func setupNixCommandTest(t testing.TB, stdout, stderr string) string {
+func setupNixCommandTest(t testing.TB, stdout, stderr string, exitCode int) string {
 	t.Helper()
 
 	commandStubMu.Lock()
@@ -57,7 +58,7 @@ func setupNixCommandTest(t testing.TB, stdout, stderr string) string {
 	})
 
 	argsFile := filepath.Join(t.TempDir(), "args.json")
-	nixCommandContext = stubCommand(t, stdout, stderr, argsFile)
+	nixCommandContext = stubCommand(t, stdout, stderr, exitCode, argsFile)
 	return argsFile
 }
 
@@ -140,6 +141,7 @@ func TestNixClientGetImageBuilderTypeParsesStreamArtifact(t *testing.T) {
 		t,
 		`{"packages":{"x86_64-linux":{"app":{"name":"stream-app","type":"derivation"}}}}`,
 		"",
+		0,
 	)
 
 	ref := mustParseReference(t, "ghcr.io/example/app:latest")
@@ -174,6 +176,7 @@ func TestNixClientBuildImageReturnsOutPath(t *testing.T) {
 		t,
 		`[{"drvPath":"/nix/store/app.drv","outputs":{"out":"/nix/store/app"}}]`,
 		"building\n",
+		0,
 	)
 
 	got, err := NewNixClient().BuildImage(context.Background(), "/workspace#packages.x86_64-linux.app")
@@ -197,7 +200,7 @@ func TestNixClientBuildImageReturnsOutPath(t *testing.T) {
 }
 
 func TestNixClientBuildImageReturnsErrorOnEmptyResult(t *testing.T) {
-	argsFile := setupNixCommandTest(t, `[]`, "")
+	argsFile := setupNixCommandTest(t, `[]`, "", 0)
 
 	_, err := NewNixClient().BuildImage(context.Background(), "/workspace#packages.x86_64-linux.app")
 	if err == nil || !strings.Contains(err.Error(), "no output path found") {
@@ -215,11 +218,43 @@ func TestNixClientBuildImageReturnsErrorOnEmptyResult(t *testing.T) {
 	)
 }
 
+func TestNixClientBuildImageReturnsStderrOnCommandFailure(t *testing.T) {
+	argsFile := setupNixCommandTest(
+		t,
+		`[{"drvPath":"/nix/store/app.drv","outputs":{"out":"/nix/store/app"}}]`,
+		"build failed\nhint: inspect logs",
+		1,
+	)
+
+	_, err := NewNixClient().BuildImage(context.Background(), "/workspace#packages.x86_64-linux.app")
+	if err == nil {
+		t.Fatal("expected build failure")
+	}
+	if !strings.Contains(err.Error(), "failed to wait for command") {
+		t.Fatalf("expected wait error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "build failed\nhint: inspect logs") {
+		t.Fatalf("expected stderr in error, got %v", err)
+	}
+
+	assertCapturedCommandArgs(
+		t,
+		argsFile,
+		"nix",
+		"build",
+		"--accept-flake-config",
+		"--no-link",
+		"--json",
+		"/workspace#packages.x86_64-linux.app",
+	)
+}
+
 func TestNixClientBuildPlatformImageFormatsFlakeTarget(t *testing.T) {
 	argsFile := setupNixCommandTest(
 		t,
 		`[{"drvPath":"/nix/store/app.drv","outputs":{"out":"/nix/store/app"}}]`,
 		"",
+		0,
 	)
 
 	ref, err := name.ParseReference("ghcr.io/example/app:latest")
