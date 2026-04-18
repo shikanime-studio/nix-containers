@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -26,23 +25,15 @@ func (fakeRoundTripper) RoundTrip(*http.Request) (*http.Response, error) {
 	return nil, nil
 }
 
-func TestNewContainerClientUsesInjectedFactoryAndOptions(t *testing.T) {
-	originalFactory := newDockerClient
-	t.Cleanup(func() { newDockerClient = originalFactory })
-
+func TestNewContainerClientUsesInjectedDockerClientAndOptions(t *testing.T) {
 	wantClient := &client.Client{}
-	var gotCtx context.Context
-	newDockerClient = func(ctx context.Context) (*client.Client, error) {
-		gotCtx = ctx
-		return wantClient, nil
-	}
-
 	ctx := context.WithValue(context.Background(), testContextKey("test"), "value")
 	keychain := fakeKeychain{}
 	transport := fakeRoundTripper{}
 
 	containerClient, err := NewContainerClient(
 		ctx,
+		WithContainerDockerClient(wantClient),
 		WithContainerKeychain(keychain),
 		WithContainerTransport(transport),
 	)
@@ -50,9 +41,6 @@ func TestNewContainerClientUsesInjectedFactoryAndOptions(t *testing.T) {
 		t.Fatalf("create container client failed: %v", err)
 	}
 
-	if gotCtx != ctx {
-		t.Fatalf("expected factory to receive original context")
-	}
 	if containerClient.docker != wantClient {
 		t.Fatalf("expected injected docker client to be preserved")
 	}
@@ -67,20 +55,6 @@ func TestNewContainerClientUsesInjectedFactoryAndOptions(t *testing.T) {
 			"expected default and override remote options, got %d",
 			len(containerClient.remote),
 		)
-	}
-}
-
-func TestNewContainerClientWrapsFactoryError(t *testing.T) {
-	originalFactory := newDockerClient
-	t.Cleanup(func() { newDockerClient = originalFactory })
-
-	newDockerClient = func(context.Context) (*client.Client, error) {
-		return nil, errors.New("boom")
-	}
-
-	_, err := NewContainerClient(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "create docker client failed: boom") {
-		t.Fatalf("expected wrapped factory error, got %v", err)
 	}
 }
 

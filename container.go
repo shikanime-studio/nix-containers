@@ -24,20 +24,12 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-var newDockerClient = func(ctx context.Context) (*client.Client, error) {
-	docker, err := client.NewClientWithOpts(client.FromEnv)
-	if err != nil {
-		return nil, err
-	}
-	docker.NegotiateAPIVersion(ctx)
-	return docker, nil
-}
-
 var streamCommandContext = exec.CommandContext
 
 type ContainerOption func(*containerOptions)
 
 type containerOptions struct {
+	docker    *client.Client
 	keychain  authn.Keychain
 	transport http.RoundTripper
 	remote    []remote.Option
@@ -68,6 +60,12 @@ func WithContainerKeychain(kc authn.Keychain) ContainerOption {
 	}
 }
 
+func WithContainerDockerClient(docker *client.Client) ContainerOption {
+	return func(o *containerOptions) {
+		o.docker = docker
+	}
+}
+
 func WithContainerTransport(t http.RoundTripper) ContainerOption {
 	return func(o *containerOptions) {
 		o.transport = t
@@ -81,7 +79,7 @@ func WithContainerRemoteOption(opt remote.Option) ContainerOption {
 	}
 }
 
-func NewContainerClient(ctx context.Context, opts ...ContainerOption) (*ContainerClient, error) {
+func makeContainerOptions(opts ...ContainerOption) *containerOptions {
 	o := &containerOptions{
 		keychain:  authn.DefaultKeychain,
 		transport: http.DefaultTransport,
@@ -91,10 +89,19 @@ func NewContainerClient(ctx context.Context, opts ...ContainerOption) (*Containe
 	for _, opt := range opts {
 		opt(o)
 	}
+	return o
+}
 
-	docker, err := newDockerClient(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("create docker client failed: %w", err)
+func NewContainerClient(ctx context.Context, opts ...ContainerOption) (*ContainerClient, error) {
+	o := makeContainerOptions(opts...)
+	docker := o.docker
+	if docker == nil {
+		var err error
+		docker, err = client.NewClientWithOpts(client.FromEnv)
+		if err != nil {
+			return nil, fmt.Errorf("create docker client failed: %w", err)
+		}
+		docker.NegotiateAPIVersion(ctx)
 	}
 
 	return &ContainerClient{
