@@ -78,15 +78,54 @@ func getImageBuilderType(
 	}
 
 	if strings.HasPrefix(pkg.Name, "stream-") {
-		slog.InfoContext(ctx, "resolved builder type", "ref", ref.Name(), "system", system, "package", pkgName, "builder_type", StreamBuilderType, "artifact_name", pkg.Name)
+		slog.InfoContext(
+			ctx,
+			"resolved builder type",
+			"ref",
+			ref.Name(),
+			"system",
+			system,
+			"package",
+			pkgName,
+			"builder_type",
+			StreamBuilderType,
+			"artifact_name",
+			pkg.Name,
+		)
 		return StreamBuilderType, nil
 	}
 	if strings.HasSuffix(pkg.Name, ".tar.gz") {
-		slog.InfoContext(ctx, "resolved builder type", "ref", ref.Name(), "system", system, "package", pkgName, "builder_type", TarGzBuilderType, "artifact_name", pkg.Name)
+		slog.InfoContext(
+			ctx,
+			"resolved builder type",
+			"ref",
+			ref.Name(),
+			"system",
+			system,
+			"package",
+			pkgName,
+			"builder_type",
+			TarGzBuilderType,
+			"artifact_name",
+			pkg.Name,
+		)
 		return TarGzBuilderType, nil
 	}
 
-	slog.WarnContext(ctx, "resolved builder type", "ref", ref.Name(), "system", system, "package", pkgName, "builder_type", UnknownBuilderType, "artifact_name", pkg.Name)
+	slog.WarnContext(
+		ctx,
+		"resolved builder type",
+		"ref",
+		ref.Name(),
+		"system",
+		system,
+		"package",
+		pkgName,
+		"builder_type",
+		UnknownBuilderType,
+		"artifact_name",
+		pkg.Name,
+	)
 	return UnknownBuilderType, nil
 }
 
@@ -343,6 +382,15 @@ func buildImage(
 		"drvPath", result[0].DrvPath,
 		"out", result[0].Outputs["out"],
 	)
-	slog.InfoContext(ctx, "nix build completed", "url", url, "drv_path", result[0].DrvPath, "out", result[0].Outputs["out"])
+	slog.InfoContext(
+		ctx,
+		"nix build completed",
+		"url",
+		url,
+		"drv_path",
+		result[0].DrvPath,
+		"out",
+		result[0].Outputs["out"],
+	)
 	return result[0].Outputs["out"], nil
 }
