@@ -15,9 +15,9 @@ var (
 		Short: "Build OCI images from Nix flakes",
 		Long:  "CLI to build and optionally push OCI images produced from Nix flakes. Primarily intended for Skaffold custom builders. Configure via env vars: IMAGE, PLATFORMS, BUILD_CONTEXT, PUSH_IMAGE, LOG_LEVEL, ACCEPT_FLAKE_CONFIG.",
 		Example: "# Show help\n" +
-			"./nix-containers --help\n\n" +
+			"nix-containers --help\n\n" +
 			"# Build via Skaffold custom builder\n" +
-			"IMAGE=ghcr.io/you/app:latest PLATFORMS=linux/amd64 BUILD_CONTEXT=. PUSH_IMAGE=true ./nix-containers skaffold build",
+			"IMAGE=ghcr.io/you/app:latest PLATFORMS=linux/amd64 BUILD_CONTEXT=. PUSH_IMAGE=true nix-containers skaffold build",
 	}
 
 	buildCmd = &cobra.Command{

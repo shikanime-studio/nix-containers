@@ -53,6 +53,7 @@
             pname = "nix-containers";
             version = "v0.1.0";
             src = lib.cleanSource ./.;
+            subPackages = [ "cmd/nix-containers" ];
             vendorHash = null;
             meta = {
               description = "Nix Containers CLI";
