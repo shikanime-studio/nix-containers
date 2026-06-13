@@ -1,4 +1,4 @@
-# Nix-Containers
+# Nix Containers
 
 Build OCI images from Nix flakes, with optional multi-platform output and push to registries. Designed for use as a Skaffold custom builder, but usable directly from the CLI.
 
