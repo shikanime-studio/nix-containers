@@ -254,15 +254,13 @@ func (c *ContainerClient) PushManifest(
 	ref name.Reference,
 	adds []mutate.IndexAddendum,
 ) error {
-	if err := remote.WriteIndex(ref, mutate.AppendManifests(empty.Index, adds...), c.remote...); err != nil {
+	if err := remote.WriteIndex(
+		ref,
+		mutate.AppendManifests(empty.Index, adds...),
+		c.remote...,
+	); err != nil {
 		return fmt.Errorf("push manifest failed: %w", err)
 	}
-	return nil
-}
-
-// TrackImage is a no-op when pushing from tarball.
-// The image has already been pushed to the remote registry.
-func (c *ContainerClient) TrackImage(_ name.Reference) error {
 	return nil
 }
 

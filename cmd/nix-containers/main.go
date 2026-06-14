@@ -55,7 +55,8 @@ var (
 					"build context must be provided via arg or --build-context/BUILD_CONTEXT",
 				)
 			}
-			slog.InfoContext(ctx,
+			slog.InfoContext(
+				ctx,
 				"build config",
 				"image", image.String(),
 				"platforms", plats,
@@ -86,13 +87,19 @@ var (
 func init() {
 	rootCmd.PersistentFlags().
 		Bool("accept-flake-config", false, "accept nix flake config during build")
-	if err := viper.BindPFlag("accept_flake_config", rootCmd.PersistentFlags().Lookup("accept-flake-config")); err != nil {
+	if err := viper.BindPFlag(
+		"accept_flake_config",
+		rootCmd.PersistentFlags().Lookup("accept-flake-config"),
+	); err != nil {
 		slog.Error("bind flag failed", "flag", "accept-flake-config", "err", err)
 		os.Exit(1)
 	}
 	rootCmd.PersistentFlags().
 		Bool("no-pure-eval", false, "disable pure evaluation of nix expressions")
-	if err := viper.BindPFlag("no_pure_eval", rootCmd.PersistentFlags().Lookup("no-pure-eval")); err != nil {
+	if err := viper.BindPFlag(
+		"no_pure_eval",
+		rootCmd.PersistentFlags().Lookup("no-pure-eval"),
+	); err != nil {
 		slog.Error("bind flag failed", "flag", "no-pure-eval", "err", err)
 		os.Exit(1)
 	}
@@ -117,7 +124,10 @@ func init() {
 		"",
 		"path to the flake build context (defaults to positional arg or BUILD_CONTEXT)",
 	)
-	if err := viper.BindPFlag("build_context", buildCmd.Flags().Lookup("build-context")); err != nil {
+	if err := viper.BindPFlag(
+		"build_context",
+		buildCmd.Flags().Lookup("build-context"),
+	); err != nil {
 		slog.Error("bind flag failed", "flag", "build-context", "err", err)
 		os.Exit(1)
 	}
