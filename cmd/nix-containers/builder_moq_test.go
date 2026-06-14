@@ -197,13 +197,13 @@ var _ containerBuilderClient = &mockContainerBuilderClient{}
 //			LoadStreamImageFunc: func(contextMoqParam context.Context, reference name.Reference, s string) (name.Reference, error) {
 //				panic("mock out the LoadStreamImage method")
 //			},
-//			PushImageFunc: func(reference name.Reference) error {
+//			PushImageFunc: func(reference name.Reference, path string) error {
 //				panic("mock out the PushImage method")
 //			},
 //			PushManifestFunc: func(reference name.Reference, indexAddendums []mutate.IndexAddendum) error {
 //				panic("mock out the PushManifest method")
 //			},
-//			PushPlatformImageFunc: func(reference name.Reference, platform *v1.Platform) (mutate.IndexAddendum, error) {
+//			PushPlatformImageFunc: func(reference name.Reference, platform *v1.Platform, path string) (mutate.IndexAddendum, error) {
 //				panic("mock out the PushPlatformImage method")
 //			},
 //			TagImageFunc: func(contextMoqParam context.Context, reference1 name.Reference, reference2 name.Reference) error {
@@ -229,13 +229,13 @@ type mockContainerBuilderClient struct {
 	LoadStreamImageFunc func(contextMoqParam context.Context, reference name.Reference, s string) (name.Reference, error)
 
 	// PushImageFunc mocks the PushImage method.
-	PushImageFunc func(reference name.Reference) error
+	PushImageFunc func(reference name.Reference, path string) error
 
 	// PushManifestFunc mocks the PushManifest method.
 	PushManifestFunc func(reference name.Reference, indexAddendums []mutate.IndexAddendum) error
 
 	// PushPlatformImageFunc mocks the PushPlatformImage method.
-	PushPlatformImageFunc func(reference name.Reference, platform *v1.Platform) (mutate.IndexAddendum, error)
+	PushPlatformImageFunc func(reference name.Reference, platform *v1.Platform, path string) (mutate.IndexAddendum, error)
 
 	// TagImageFunc mocks the TagImage method.
 	TagImageFunc func(contextMoqParam context.Context, reference1 name.Reference, reference2 name.Reference) error
@@ -272,6 +272,8 @@ type mockContainerBuilderClient struct {
 		PushImage []struct {
 			// Reference is the reference argument value.
 			Reference name.Reference
+			// Path is the path argument value.
+			Path string
 		}
 		// PushManifest holds details about calls to the PushManifest method.
 		PushManifest []struct {
@@ -286,6 +288,8 @@ type mockContainerBuilderClient struct {
 			Reference name.Reference
 			// Platform is the platform argument value.
 			Platform *v1.Platform
+			// Path is the path argument value.
+			Path string
 		}
 		// TagImage holds details about calls to the TagImage method.
 		TagImage []struct {
@@ -434,11 +438,13 @@ func (mock *mockContainerBuilderClient) LoadStreamImageCalls() []struct {
 }
 
 // PushImage calls PushImageFunc.
-func (mock *mockContainerBuilderClient) PushImage(reference name.Reference) error {
+func (mock *mockContainerBuilderClient) PushImage(reference name.Reference, path string) error {
 	callInfo := struct {
 		Reference name.Reference
+		Path      string
 	}{
 		Reference: reference,
+		Path:      path,
 	}
 	mock.lockPushImage.Lock()
 	mock.calls.PushImage = append(mock.calls.PushImage, callInfo)
@@ -447,7 +453,7 @@ func (mock *mockContainerBuilderClient) PushImage(reference name.Reference) erro
 		var errOut error
 		return errOut
 	}
-	return mock.PushImageFunc(reference)
+	return mock.PushImageFunc(reference, path)
 }
 
 // PushImageCalls gets all the calls that were made to PushImage.
@@ -456,9 +462,11 @@ func (mock *mockContainerBuilderClient) PushImage(reference name.Reference) erro
 //	len(mockedcontainerBuilderClient.PushImageCalls())
 func (mock *mockContainerBuilderClient) PushImageCalls() []struct {
 	Reference name.Reference
+	Path      string
 } {
 	var calls []struct {
 		Reference name.Reference
+		Path      string
 	}
 	mock.lockPushImage.RLock()
 	calls = mock.calls.PushImage
@@ -504,13 +512,15 @@ func (mock *mockContainerBuilderClient) PushManifestCalls() []struct {
 }
 
 // PushPlatformImage calls PushPlatformImageFunc.
-func (mock *mockContainerBuilderClient) PushPlatformImage(reference name.Reference, platform *v1.Platform) (mutate.IndexAddendum, error) {
+func (mock *mockContainerBuilderClient) PushPlatformImage(reference name.Reference, platform *v1.Platform, path string) (mutate.IndexAddendum, error) {
 	callInfo := struct {
 		Reference name.Reference
 		Platform  *v1.Platform
+		Path      string
 	}{
 		Reference: reference,
 		Platform:  platform,
+		Path:      path,
 	}
 	mock.lockPushPlatformImage.Lock()
 	mock.calls.PushPlatformImage = append(mock.calls.PushPlatformImage, callInfo)
@@ -522,7 +532,7 @@ func (mock *mockContainerBuilderClient) PushPlatformImage(reference name.Referen
 		)
 		return indexAddendumOut, errOut
 	}
-	return mock.PushPlatformImageFunc(reference, platform)
+	return mock.PushPlatformImageFunc(reference, platform, path)
 }
 
 // PushPlatformImageCalls gets all the calls that were made to PushPlatformImage.
@@ -532,10 +542,12 @@ func (mock *mockContainerBuilderClient) PushPlatformImage(reference name.Referen
 func (mock *mockContainerBuilderClient) PushPlatformImageCalls() []struct {
 	Reference name.Reference
 	Platform  *v1.Platform
+	Path      string
 } {
 	var calls []struct {
 		Reference name.Reference
 		Platform  *v1.Platform
+		Path      string
 	}
 	mock.lockPushPlatformImage.RLock()
 	calls = mock.calls.PushPlatformImage
