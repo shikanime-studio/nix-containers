@@ -41,10 +41,9 @@ type containerBuilderClient interface {
 	TagImage(context.Context, name.Reference, name.Reference) error
 	LoadImage(context.Context, name.Reference, string) (name.Reference, error)
 	LoadStreamImage(context.Context, name.Reference, string) (name.Reference, error)
-	PushImage(name.Reference) error
-	PushPlatformImage(name.Reference, *v1.Platform) (mutate.IndexAddendum, error)
+	PushImage(name.Reference, string) error
+	PushPlatformImage(name.Reference, *v1.Platform, string) (mutate.IndexAddendum, error)
 	PushManifest(name.Reference, []mutate.IndexAddendum) error
-	TrackImage(name.Reference) error
 }
 
 type Builder struct {
@@ -116,7 +115,7 @@ func (b *Builder) buildPlatformImage(
 	buildContext string,
 	p *v1.Platform,
 	ref name.Reference,
-) (name.Reference, error) {
+) (name.Reference, string, error) {
 	slog.InfoContext(ctx, "build image", "ref", ref.Name(), "os", p.OS, "arch", p.Architecture)
 
 	path, err := b.nix.BuildPlatformImage(
@@ -127,12 +126,12 @@ func (b *Builder) buildPlatformImage(
 		b.imageOpts...,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("build image failed: %w", err)
+		return nil, "", fmt.Errorf("build image failed: %w", err)
 	}
 
 	builderType, err := b.nix.GetImageBuilderType(ctx, buildContext, ref, p, b.imageOpts...)
 	if err != nil {
-		return nil, fmt.Errorf("check image builder type failed: %w", err)
+		return nil, "", fmt.Errorf("check image builder type failed: %w", err)
 	}
 	slog.InfoContext(
 		ctx,
@@ -158,7 +157,8 @@ func (b *Builder) buildPlatformImage(
 			"path",
 			path,
 		)
-		return b.container.LoadStreamImage(ctx, ref, path)
+		loadedRef, err := b.container.LoadStreamImage(ctx, ref, path)
+		return loadedRef, path, err
 	}
 	if builderType == TarGzBuilderType {
 		slog.InfoContext(
@@ -171,10 +171,11 @@ func (b *Builder) buildPlatformImage(
 			"path",
 			path,
 		)
-		return b.container.LoadImage(ctx, ref, path)
+		loadedRef, err := b.container.LoadImage(ctx, ref, path)
+		return loadedRef, path, err
 	}
 
-	return nil, fmt.Errorf("unknown builder type: %d", builderType)
+	return nil, "", fmt.Errorf("unknown builder type: %d", builderType)
 }
 
 func (b *Builder) buildAndPushMultiplatformImage(
@@ -203,7 +204,7 @@ func (b *Builder) buildAndPushMultiplatformImage(
 				"platform",
 				formatSystemName(p),
 			)
-			loadedRef, err := b.buildPlatformImage(ctx, buildContext, p, ref)
+			loadedRef, path, err := b.buildPlatformImage(ctx, buildContext, p, ref)
 			if err != nil {
 				return err
 			}
@@ -254,7 +255,7 @@ func (b *Builder) buildAndPushMultiplatformImage(
 				"platform_ref",
 				platformTag.Name(),
 			)
-			add, err := b.container.PushPlatformImage(platformTag, p)
+			add, err := b.container.PushPlatformImage(platformTag, p, path)
 			if err != nil {
 				return err
 			}
@@ -290,10 +291,6 @@ func (b *Builder) buildAndPushMultiplatformImage(
 		return err
 	}
 	slog.InfoContext(ctx, "manifest pushed", "ref", ref.Name(), "platform_count", len(adds))
-	if err := b.container.TrackImage(ref); err != nil {
-		return err
-	}
-	slog.InfoContext(ctx, "manifest written to daemon", "ref", ref.Name())
 	return nil
 }
 
@@ -303,7 +300,7 @@ func (b *Builder) buildAndPushImage(
 	ref name.Reference,
 	p *v1.Platform,
 ) error {
-	loadedRef, err := b.buildPlatformImage(ctx, buildContext, p, ref)
+	loadedRef, path, err := b.buildPlatformImage(ctx, buildContext, p, ref)
 	if err != nil {
 		return fmt.Errorf("build flake image failed: %w", err)
 	}
@@ -315,7 +312,7 @@ func (b *Builder) buildAndPushImage(
 	}
 	if b.push {
 		slog.DebugContext(ctx, "push image", "ref", ref.Name())
-		if err := b.container.PushImage(ref); err != nil {
+		if err := b.container.PushImage(ref, path); err != nil {
 			return err
 		}
 	}
