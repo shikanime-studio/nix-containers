@@ -17,10 +17,10 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/daemon"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -221,10 +221,10 @@ func (c *ContainerClient) LoadStreamImage(
 	return loadedRef, nil
 }
 
-func (c *ContainerClient) PushImage(ref name.Reference) error {
-	img, err := daemon.Image(ref)
+func (c *ContainerClient) PushImage(ref name.Reference, path string) error {
+	img, err := tarball.ImageFromPath(path, nil)
 	if err != nil {
-		return fmt.Errorf("load image failed: %w", err)
+		return fmt.Errorf("load image from tarball failed: %w", err)
 	}
 	if err := remote.Write(ref, img, c.remote...); err != nil {
 		return fmt.Errorf("push image failed: %w", err)
@@ -235,10 +235,11 @@ func (c *ContainerClient) PushImage(ref name.Reference) error {
 func (c *ContainerClient) PushPlatformImage(
 	ref name.Reference,
 	p *v1.Platform,
+	path string,
 ) (mutate.IndexAddendum, error) {
-	img, err := daemon.Image(ref)
+	img, err := tarball.ImageFromPath(path, nil)
 	if err != nil {
-		return mutate.IndexAddendum{}, fmt.Errorf("load image failed: %w", err)
+		return mutate.IndexAddendum{}, fmt.Errorf("load image from tarball failed: %w", err)
 	}
 	if err := remote.Write(ref, img, c.remote...); err != nil {
 		return mutate.IndexAddendum{}, fmt.Errorf("push image failed: %w", err)
@@ -259,18 +260,9 @@ func (c *ContainerClient) PushManifest(
 	return nil
 }
 
-func (c *ContainerClient) TrackImage(ref name.Reference) error {
-	img, err := remote.Image(ref, c.remote...)
-	if err != nil {
-		return fmt.Errorf("pull manifest failed: %w", err)
-	}
-	tag, err := name.NewTag(ref.Name())
-	if err != nil {
-		return fmt.Errorf("failed to format manifest reference: %w", err)
-	}
-	if _, err := daemon.Write(tag, img); err != nil {
-		return fmt.Errorf("failed to write manifest to daemon: %w", err)
-	}
+// TrackImage is a no-op when pushing from tarball.
+// The image has already been pushed to the remote registry.
+func (c *ContainerClient) TrackImage(_ name.Reference) error {
 	return nil
 }
 
