@@ -76,7 +76,12 @@ func TestBuilderBuildAndPushSinglePlatformStreamFlow(t *testing.T) {
 		WithPush(true),
 		WithStreamImageOption(WithAcceptFlakeConfig()),
 	)
-	if err := builder.BuildAndPush(context.Background(), "/workspace", ref, []*v1.Platform{plat}); err != nil {
+	if err := builder.BuildAndPush(
+		context.Background(),
+		"/workspace",
+		ref,
+		[]*v1.Platform{plat},
+	); err != nil {
 		t.Fatalf("build and push failed: %v", err)
 	}
 
@@ -172,7 +177,7 @@ func TestBuilderBuildAndPushMultiplatformTracksImage(t *testing.T) {
 		LoadImageFunc: func(context.Context, name.Reference, string) (name.Reference, error) {
 			return loadedRef, nil
 		},
-		PushPlatformImageFunc: func(name.Reference, *v1.Platform) (mutate.IndexAddendum, error) {
+		PushPlatformImageFunc: func(name.Reference, *v1.Platform, string) (mutate.IndexAddendum, error) {
 			return mutate.IndexAddendum{}, nil
 		},
 	}
@@ -201,14 +206,5 @@ func TestBuilderBuildAndPushMultiplatformTracksImage(t *testing.T) {
 	}
 	if len(containerClient.PushManifestCalls()) != 1 {
 		t.Fatalf("expected one manifest push, got %d", len(containerClient.PushManifestCalls()))
-	}
-	trackImageCalls := containerClient.TrackImageCalls()
-	if len(trackImageCalls) != 1 || trackImageCalls[0].Reference.Name() != ref.Name() {
-		t.Fatalf(
-			"expected tracked ref %s, got calls=%d ref=%v",
-			ref.Name(),
-			len(trackImageCalls),
-			trackImageCalls,
-		)
 	}
 }

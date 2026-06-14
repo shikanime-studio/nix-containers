@@ -36,7 +36,8 @@ var (
 			pushImage := getPushImage()
 			acceptFlake := getAcceptFlakeConfig()
 			noPureEvalFlake := getNoPureEval()
-			slog.InfoContext(ctx,
+			slog.InfoContext(
+				ctx,
 				"build config",
 				"image", ref.String(),
 				"platforms", plats,

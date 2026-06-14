@@ -297,7 +297,8 @@ func (n *NixClient) BuildImage(
 	if len(result) == 0 {
 		return "", fmt.Errorf("no output path found in nix build result")
 	}
-	slog.DebugContext(ctx,
+	slog.DebugContext(
+		ctx,
 		"nix build completed",
 		"url", url,
 		"drvPath", result[0].DrvPath,
