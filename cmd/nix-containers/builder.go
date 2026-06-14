@@ -44,7 +44,6 @@ type containerBuilderClient interface {
 	PushImage(name.Reference, string) error
 	PushPlatformImage(name.Reference, *v1.Platform, string) (mutate.IndexAddendum, error)
 	PushManifest(name.Reference, []mutate.IndexAddendum) error
-	TrackImage(name.Reference) error
 }
 
 type Builder struct {
@@ -292,10 +291,6 @@ func (b *Builder) buildAndPushMultiplatformImage(
 		return err
 	}
 	slog.InfoContext(ctx, "manifest pushed", "ref", ref.Name(), "platform_count", len(adds))
-	if err := b.container.TrackImage(ref); err != nil {
-		return err
-	}
-	slog.InfoContext(ctx, "manifest written to daemon", "ref", ref.Name())
 	return nil
 }
 
