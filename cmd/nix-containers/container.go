@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -222,7 +223,7 @@ func (c *ContainerClient) LoadStreamImage(
 }
 
 func (c *ContainerClient) PushImage(ref name.Reference, path string) error {
-	img, err := tarball.ImageFromPath(path, nil)
+	img, err := openTarball(path)
 	if err != nil {
 		return fmt.Errorf("load image from tarball failed: %w", err)
 	}
@@ -237,7 +238,7 @@ func (c *ContainerClient) PushPlatformImage(
 	p *v1.Platform,
 	path string,
 ) (mutate.IndexAddendum, error) {
-	img, err := tarball.ImageFromPath(path, nil)
+	img, err := openTarball(path)
 	if err != nil {
 		return mutate.IndexAddendum{}, fmt.Errorf("load image from tarball failed: %w", err)
 	}
@@ -248,6 +249,36 @@ func (c *ContainerClient) PushPlatformImage(
 		Add:        img,
 		Descriptor: v1.Descriptor{Platform: p},
 	}, nil
+}
+
+func openTarball(path string) (v1.Image, error) {
+	opener := func() (io.ReadCloser, error) {
+		f, err := os.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		if strings.HasSuffix(path, ".tar.gz") {
+			gr, err := gzip.NewReader(f)
+			if err != nil {
+				f.Close()
+				return nil, err
+			}
+			return &gzipReadCloser{gr, f}, nil
+		}
+		return f, nil
+	}
+	return tarball.Image(opener, nil)
+}
+
+// gzipReadCloser wraps a gzip.Reader to also close the underlying file.
+type gzipReadCloser struct {
+	*gzip.Reader
+	file *os.File
+}
+
+func (g *gzipReadCloser) Close() error {
+	g.Reader.Close()
+	return g.file.Close()
 }
 
 func (c *ContainerClient) PushManifest(
