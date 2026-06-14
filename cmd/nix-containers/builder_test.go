@@ -172,7 +172,7 @@ func TestBuilderBuildAndPushMultiplatformTracksImage(t *testing.T) {
 		LoadImageFunc: func(context.Context, name.Reference, string) (name.Reference, error) {
 			return loadedRef, nil
 		},
-		PushPlatformImageFunc: func(name.Reference, *v1.Platform) (mutate.IndexAddendum, error) {
+		PushPlatformImageFunc: func(name.Reference, *v1.Platform, string) (mutate.IndexAddendum, error) {
 			return mutate.IndexAddendum{}, nil
 		},
 	}
