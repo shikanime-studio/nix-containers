@@ -13,6 +13,12 @@ directly from the CLI.
 - `nix/` — Nix build logic
 - `flake.nix` — Development shell
 
+## Usage
+
+Build container images directly from Nix flakes. Supports multi-platform
+builds and pushing to container registries. Integrates with Skaffold as a
+custom builder.
+
 ## Commit Style
 
 - Plain-text capitalized title, no conventional-commit prefix
@@ -35,4 +41,5 @@ directly from the CLI.
 - Require signed commits
 - Squash+rebase merge only
 
-_Licensed under AGPL-3.0. Test with both `docker` and `containerd` runtimes_
+*Licensed under AGPL-3.0. Test with both `docker` and `containerd` runtimes.
+Always use worktrees when making changes.*
