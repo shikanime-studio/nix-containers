@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"log/slog"
+	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -68,5 +70,29 @@ var (
 
 func init() {
 	skaffoldCmd.AddCommand(skaffoldBuildCmd)
+	skaffoldBuildCmd.Flags().String(
+		"platforms",
+		"",
+		"comma-separated target platforms os/arch (e.g., linux/amd64,linux/arm64); overrides PLATFORMS env var",
+	)
+	if err := viper.BindPFlag(
+		"platforms",
+		skaffoldBuildCmd.Flags().Lookup("platforms"),
+	); err != nil {
+		slog.Error("bind flag failed", "flag", "platforms", "err", err)
+		os.Exit(1)
+	}
+	skaffoldBuildCmd.Flags().String(
+		"platform",
+		"",
+		"single target platform os/arch (e.g., linux/amd64); Skaffold custom builder convention; overrides --platforms and PLATFORMS env var",
+	)
+	if err := viper.BindPFlag(
+		"platforms",
+		skaffoldBuildCmd.Flags().Lookup("platform"),
+	); err != nil {
+		slog.Error("bind flag failed", "flag", "platform", "err", err)
+		os.Exit(1)
+	}
 	rootCmd.AddCommand(skaffoldCmd)
 }
