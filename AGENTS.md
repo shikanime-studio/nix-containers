@@ -1,6 +1,8 @@
 # Nix Containers
 
-Build OCI images from Nix flakes, with optional multi-platform output and push to registries. Designed for use as a Skaffold custom builder, but usable directly from the CLI.
+Build OCI images from Nix flakes, with optional multi-platform output and push
+to registries. Designed for use as a Skaffold custom builder, but usable
+directly from the CLI.
 
 **Language:** Go (Nix for build definitions)
 
@@ -33,4 +35,4 @@ Build OCI images from Nix flakes, with optional multi-platform output and push t
 - Require signed commits
 - Squash+rebase merge only
 
-*Licensed under AGPL-3.0. Test with both `docker` and `containerd` runtimes*
+_Licensed under AGPL-3.0. Test with both `docker` and `containerd` runtimes_
