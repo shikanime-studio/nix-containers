@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/google/go-containerregistry/pkg/name"
@@ -84,7 +85,14 @@ func getPlatforms() []*v1.Platform {
 	ps := strings.Split(v, ",")
 	plats := make([]*v1.Platform, 0, len(ps))
 	for _, s := range ps {
-		plats = append(plats, parsePlatform(s))
+		p := parsePlatform(s)
+		if slices.ContainsFunc(plats, func(existing *v1.Platform) bool {
+			return existing.OS == p.OS && existing.Architecture == p.Architecture
+		}) {
+			slog.Warn("duplicate platform skipped", "platform", p.OS+"/"+p.Architecture)
+			continue
+		}
+		plats = append(plats, p)
 	}
 	return plats
 }
